@@ -24,7 +24,7 @@ std::time_t config_stamp() {
 }  // namespace
 
 int run_server_service() {
-    log_open(logs_dir() / L"server.log");
+    log_open(service_logs_dir() / L"server.log");  // 4.0: zapisi procesa SYSTEM odvojeno
     install_crash_logging("Solarni poslužitelj");
     NamedMutex mutex(kServerServiceMutex);
     if (!mutex.owned()) {

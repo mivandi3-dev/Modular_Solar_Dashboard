@@ -29,8 +29,15 @@ fs::path config_file();  // home/config.json
 fs::path db_file();
 fs::path layout_file();
 fs::path images_dir();
-fs::path logs_dir();
-fs::path backups_dir();
+fs::path logs_dir();       // zapisi sučelja (data\logs)
+fs::path backups_dir();    // 4.0: service\backups (piše samo SYSTEM)
+// 4.0 (SMA-02): mapa u koju piše samo zadatak sustava (SYSTEM) – instalacija joj daje ACL samo za SYSTEM i
+// administratore (Users čitanje): sigurnosne kopije, alerts.json, zapisi pollera i servisa
+fs::path service_dir();
+fs::path service_logs_dir();
+// true ako ni jedna mapa od home_dir() do `dir` (uključivo) nije točka ponovne obrade (spojnica, simbolička veza);
+// prije svakog upisa procesa SYSTEM – inače bi korisnik spojnicom preusmjerio upis u sistemsku mapu
+bool no_reparse_points(const fs::path& dir);
 
 // ---------------------------------------------------------------- zapisnik
 enum class Level { Info, Warn, Error };

@@ -70,12 +70,32 @@ fs::path home_dir() {
 }
 
 fs::path data_dir() { return home_dir() / L"data"; }
+fs::path service_dir() { return home_dir() / L"service"; }
+fs::path service_logs_dir() { return service_dir() / L"logs"; }
+
+bool no_reparse_points(const fs::path& dir) {
+    const fs::path home = home_dir();
+    const fs::path rel = dir.lexically_relative(home);
+    if (rel.empty() || *rel.begin() == L"..") return false;  // samo mape unutar home_dir()
+    fs::path cur = home;
+    const auto check = [](const fs::path& p) {
+        const DWORD a = GetFileAttributesW(p.c_str());
+        return a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_REPARSE_POINT);  // nepostojeća mapa se tek stvara
+    };
+    if (!check(cur)) return false;
+    for (const auto& part : rel) {
+        if (part == L".") continue;
+        cur /= part;
+        if (!check(cur)) return false;
+    }
+    return true;
+}
 fs::path config_file() { return home_dir() / L"config.json"; }
 fs::path db_file() { return data_dir() / L"solar.db"; }
 fs::path layout_file() { return data_dir() / L"layout.json"; }
 fs::path images_dir() { return data_dir() / L"images"; }
 fs::path logs_dir() { return data_dir() / L"logs"; }
-fs::path backups_dir() { return data_dir() / L"backups"; }
+fs::path backups_dir() { return service_dir() / L"backups"; }
 
 // ---------------------------------------------------------------- zapisnik
 namespace {
@@ -98,7 +118,8 @@ void log_open(const fs::path& file) {
     std::lock_guard lock(g_log_mutex);
     std::error_code ec;
     fs::create_directories(file.parent_path(), ec);
-    g_log_file = file;
+    // SMA-02: zapis se ne piše kroz spojnicu/simboličku vezu (proces SYSTEM bi pisao u tuđu mapu)
+    g_log_file = no_reparse_points(file.parent_path()) ? file : fs::path();
 }
 
 void log(Level level, std::string_view message) {

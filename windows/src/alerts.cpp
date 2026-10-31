@@ -193,7 +193,7 @@ MailMessage test_message(const Settings& s, std::time_t now) {
 
 AlertState load_alert_state() {
     AlertState st;
-    const auto text = read_file(data_dir() / L"alerts.json");
+    const auto text = read_file(service_dir() / L"alerts.json");
     if (!text) return st;
     try {
         const json j = json::parse(*text);
@@ -210,7 +210,11 @@ AlertState load_alert_state() {
 void save_alert_state(const AlertState& st) {
     const json j = {{"offline_sent", st.offline_sent}, {"fault_sent", st.fault_sent}, {"low_day", st.low_day},
                     {"sent_day", st.sent_day}, {"sent_count", st.sent_count}};
-    write_file_atomic(data_dir() / L"alerts.json", j.dump());
+    if (!no_reparse_points(service_dir())) {  // SMA-02: ne piše se kroz spojnicu
+        log_error("Mapa servisa sadrži spojnicu ili simboličku vezu – stanje obavijesti se ne sprema");
+        return;
+    }
+    write_file_atomic(service_dir() / L"alerts.json", j.dump());
 }
 
 std::vector<std::string> send_mail(const Settings& s, const std::string& subj, const std::string& body,

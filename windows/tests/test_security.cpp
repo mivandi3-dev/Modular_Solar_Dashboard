@@ -330,3 +330,37 @@ TEST_CASE("SMA-04: kod za uparivanje – 12 znakova iz SHA-256 otiska, toleranta
     CHECK(pairing_code("nije otisak").empty());
     CHECK_FALSE(pairing_code_matches("", "nije otisak"));
 }
+
+// ---------------------------------------------------------------- SMA-02 (SYSTEM ne piše kroz spojnice)
+TEST_CASE("SMA-02: mape u koje piše SYSTEM odbijaju spojnice; kopije, alerts.json i zapisi servisa u mapi service") {
+    wchar_t tmp[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmp);
+    const fs::path home = fs::path(tmp) / (L"solari_sma02_" + std::to_wstring(GetCurrentProcessId()));
+    const fs::path elsewhere = fs::path(tmp) / (L"solari_sma02_cilj_" + std::to_wstring(GetCurrentProcessId()));
+    std::error_code ec;
+    fs::remove_all(home, ec);
+    fs::create_directories(home / L"service");
+    fs::create_directories(elsewhere);
+    wchar_t old[MAX_PATH * 2] = L"";
+    GetEnvironmentVariableW(L"SOLARI2_HOME", old, MAX_PATH * 2);
+    SetEnvironmentVariableW(L"SOLARI2_HOME", home.c_str());
+    _wputenv_s(L"SOLARI2_HOME", home.c_str());
+
+    CHECK(backups_dir() == home / L"service" / L"backups");
+    CHECK(service_logs_dir() == home / L"service" / L"logs");
+    CHECK(no_reparse_points(backups_dir()));        // još ne postoji – smije se stvoriti
+    CHECK(no_reparse_points(data_dir()));
+    CHECK_FALSE(no_reparse_points(elsewhere));      // izvan home_dir()
+    // spojnica (može je napraviti i običan korisnik) umjesto mape kopija → upis se odbija
+    const std::wstring cmd = L"cmd /c mklink /J \"" + backups_dir().wstring() + L"\" \"" + elsewhere.wstring() + L"\" >nul";
+    REQUIRE(_wsystem(cmd.c_str()) == 0);
+    CHECK_FALSE(no_reparse_points(backups_dir()));
+    CHECK_FALSE(no_reparse_points(backups_dir() / L"x"));
+    CHECK(no_reparse_points(service_dir()));
+
+    fs::remove(backups_dir(), ec);  // uklanja samo spojnicu
+    fs::remove_all(home, ec);
+    fs::remove_all(elsewhere, ec);
+    SetEnvironmentVariableW(L"SOLARI2_HOME", old[0] ? old : nullptr);
+    _wputenv_s(L"SOLARI2_HOME", old);
+}

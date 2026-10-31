@@ -125,7 +125,7 @@ void loop(const std::atomic<bool>& stop) {
     std::time_t mtime = config_mtime();
     std::unique_ptr<Db> db;
     try {
-        db = std::make_unique<Db>(db_file());
+        if (no_reparse_points(data_dir())) db = std::make_unique<Db>(db_file());  // SMA-02
     } catch (const std::exception& e) {
         log_error(std::string("Baza: ") + e.what());
     }
@@ -141,7 +141,7 @@ void loop(const std::atomic<bool>& stop) {
             log_info("Postavke promijenjene: " + describe(s));
         }
         try {
-            if (!db) db = std::make_unique<Db>(db_file());
+            if (!db && no_reparse_points(data_dir())) db = std::make_unique<Db>(db_file());  // SMA-02
         } catch (const std::exception& e) {
             log_error(std::string("Baza: ") + e.what());
         }
@@ -149,7 +149,9 @@ void loop(const std::atomic<bool>& stop) {
         if (backup_day != today && db) {
             backup_day = today;
             try {
-                if (auto created = daily_backup(db_file(), backups_dir(), s.backup_keep_days, today)) {
+                if (!no_reparse_points(backups_dir())) {  // SMA-02: kopija se ne piše kroz spojnicu
+                    log_error("Mapa sigurnosnih kopija sadrži spojnicu ili simboličku vezu – kopija preskočena");
+                } else if (auto created = daily_backup(db_file(), backups_dir(), s.backup_keep_days, today)) {
                     log_info("Sigurnosna kopija baze: " + narrow(created->wstring()));
                 }
             } catch (const std::exception& e) {
@@ -331,7 +333,7 @@ void Poller::run() {
 void set_poller_mutex(const wchar_t* name) { g_poller_mutex = name; }
 
 int run_poller_mode() {
-    log_open(logs_dir() / L"poller.log");
+    log_open(service_logs_dir() / L"poller.log");  // 4.0: zapisi procesa SYSTEM odvojeno od sučelja
     install_crash_logging("Poller");
     NetInit net;
     NamedMutex mutex(g_poller_mutex);

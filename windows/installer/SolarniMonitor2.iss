@@ -190,6 +190,8 @@ Name: "{#DataDir}\data"; Permissions: admins-full system-full; Flags: uninsnever
 #ifndef TestInstall
 Name: "{#DataDir}"; Permissions: users-modify; Flags: uninsneveruninstall
 Name: "{#DataDir}\data"; Permissions: users-modify; Flags: uninsneveruninstall
+; 4.0 (SMA-02): sigurnosne kopije, alerts.json i zapisi zadatka sustava – piše samo SYSTEM (ACL u [Run])
+Name: "{#DataDir}\service"; Flags: uninsneveruninstall
 #endif
 #endif
 
@@ -221,6 +223,12 @@ Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"
 ; nadogradnja s 2.x: mapa je bila dostupna svim korisnicima – samo SYSTEM (S-1-5-18) i Administratori (S-1-5-32-544)
 Filename: "icacls.exe"; Parameters: """{#DataDir}"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C /Q"; \
   Flags: runhidden waituntilterminated
+#else
+#ifndef TestInstall
+; 4.0 (SMA-02): mapa servisa – SYSTEM (S-1-5-18) i Administratori (S-1-5-32-544) puna prava, Users (S-1-5-32-545) samo čitanje;
+; naslijeđeno pravo izmjene se uklanja, pa korisnik ne može podmetnuti spojnicu u mapu u koju piše SYSTEM
+Filename: "icacls.exe"; Parameters: """{#DataDir}\service"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /T /C /Q";   Flags: runhidden waituntilterminated
+#endif
 #endif
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\poller_task.ps1"" -Register ""{app}"" {#TaskParams}"; \
   StatusMsg: "{cm:RegisteringTask}"; Tasks: poller; Flags: runhidden waituntilterminated
