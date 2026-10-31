@@ -13,6 +13,7 @@
 #include "serial.hpp"
 #include "tls.hpp"
 #include "app.hpp"
+#include "webguard.hpp"
 #include "cloud.hpp"
 #include "dashboard.hpp"
 #include "i18n.hpp"
@@ -579,6 +580,8 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     const std::set<std::string> kPublic = {"get_state", "unlock", "close", "get_i18n", "admin_login", "setup_admin", "window_control",
                                            "window_state"};
     if (locked && !kPublic.count(method)) throw std::runtime_error(tr("Postavke su zaključane PIN-om."));
+    // Glavni prozor (dashboard) ne smije mijenjati postavke ni korisnike – samo prozor postavki (PIN / prijava administratora)
+    if (kind == WindowKind::Main && settings_only_method(method)) throw std::runtime_error("Metoda nije dostupna u ovom prozoru: " + method);
 
     // ---- glavni prozor
     if (method == "get_dashboard") return async([&app] { return dashboard_json(app); });
@@ -685,15 +688,19 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     }
     if (method == "import_history") {
         std::optional<fs::path> source;
-        if (const std::string p = arg_string(args, 0); !p.empty()) source = fs::path(widen(p));
+        if (const std::string p = arg_string(args, 0); !p.empty()) {
+            // put iz JavaScripta samo ako je to ponuđena baza Python verzije (get_state.legacy_db), inače dijalog
+            const auto legacy = legacy_db();
+            if (!legacy || fs::path(widen(p)) != *legacy) return reply(fail(tr("Uvoz otkazan."), {{"cancelled", true}}));
+            source = *legacy;
+        }
         else source = pick_file(app.settings_hwnd(), widen(tr("Uvezi povijest iz datoteke (solar.db)…")), widen(tr("Baza podataka")) + L" (*.db)", L"*.db");
         if (!source) return reply(fail(tr("Uvoz otkazan."), {{"cancelled", true}}));
         return async([&app, src = *source] { return import_history(app, src); });
     }
     if (method == "import_smartlogger") {
         std::optional<fs::path> source;
-        if (const std::string p = arg_string(args, 0); !p.empty()) source = fs::path(widen(p));
-        else source = pick_file(app.settings_hwnd(), widen(tr("Uvezi povijest sa SmartLoggera (log.zip)…")),
+        source = pick_file(app.settings_hwnd(), widen(tr("Uvezi povijest sa SmartLoggera (log.zip)…")),
                                 widen(tr("Izvoz SmartLoggera")) + L" (*.zip;*.emap)", L"*.zip;*.emap");
         if (!source) return reply(fail(tr("Uvoz otkazan."), {{"cancelled", true}}));
         return async([&app, src = *source] { return import_smartlogger(app, src); });

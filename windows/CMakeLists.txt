@@ -18,7 +18,7 @@ add_library(solari_core STATIC
     src/weather.cpp src/net.cpp src/poller.cpp src/system.cpp src/images.cpp src/i18n.cpp
     src/secret.cpp src/alerts.cpp src/report.cpp src/remote.cpp src/dashboard.cpp src/cloud.cpp src/api.cpp
     src/service.cpp src/smartlogger_export.cpp src/sunspec.cpp src/fronius.cpp src/vendors.cpp
-    src/crypto.cpp src/users.cpp src/tls.cpp src/totp.cpp src/serial.cpp src/offgrid.cpp)
+    src/crypto.cpp src/users.cpp src/tls.cpp src/totp.cpp src/serial.cpp src/offgrid.cpp src/webguard.cpp)
 target_include_directories(solari_core PUBLIC src third_party third_party/webview2/include)
 target_compile_definitions(solari_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00
                                               SOLARI_VERSION="${PROJECT_VERSION}")
