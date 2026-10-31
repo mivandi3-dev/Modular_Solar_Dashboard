@@ -231,11 +231,8 @@ CloudLogin cloud_login(const std::string& base_url, const std::string& email, st
     wipe(login.body);
     const json j = parse_server_json(r);
     const std::string error = j.value("error", "");
-    if (error == "password_change") throw CloudPasswordChange(tr("Ovo je početna lozinka – upišite svoju novu lozinku."));
+    if (error == "activation_required") throw CloudPasswordChange(tr("Aktivacijski kod je točan – postavite svoju lozinku."));
     if (error == "password_invalid") throw CloudPasswordChange(j.value("message", tr("Nova lozinka ne zadovoljava pravila.")));
-    if (error == "password_expired") {
-        throw CloudError(tr("Početna lozinka je istekla (vrijedi 7 dana) – zamolite administratora da je postavi ponovno."));
-    }
     if (r.status == 401 && error.rfind("totp_", 0) == 0) {
         json info = {{"step", error == "totp_setup" || j.contains("uri") ? "setup" : "code"}, {"invalid", error == "totp_invalid"}};
         if (j.contains("uri")) info.update({{"secret", j.value("secret", "")}, {"uri", j.value("uri", "")}});

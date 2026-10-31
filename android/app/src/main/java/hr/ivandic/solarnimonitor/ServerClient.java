@@ -39,7 +39,7 @@ final class ServerClient {
         ServerException(String message) { super(message); }
     }
 
-    /** Lozinka je početna (12345678) ili nova ne zadovoljava pravila – treba nova lozinka (new_password). */
+    /** Prijava aktivacijskim kodom (4.0) ili nova lozinka ne zadovoljava pravila – treba vlastita lozinka (new_password). */
     static final class PasswordChange extends IOException {
         PasswordChange(String message) { super(message); }
     }
@@ -171,9 +171,9 @@ final class ServerClient {
             try {
                 JSONObject e = new JSONObject(new String(r.body(), StandardCharsets.UTF_8));
                 String err = e.optString("error");
-                if ("password_change".equals(err)) throw new PasswordChange("Ovo je početna lozinka – upišite svoju novu lozinku.");
+                if ("activation_required".equals(err)) throw new PasswordChange("Aktivacijski kod je točan – postavite svoju lozinku.");
                 if ("password_invalid".equals(err)) throw new PasswordChange(e.optString("message", "Nova lozinka ne zadovoljava pravila."));
-                if ("password_expired".equals(err)) throw new ServerException("Početna lozinka je istekla (vrijedi 7 dana) – zamolite administratora da je postavi ponovno.");
+                /* 4.0: istek aktivacijskog koda javlja se kao pogrešna lozinka */
                 if (err.startsWith("totp_")) {
                     boolean setup = "totp_setup".equals(err) || e.has("uri");
                     JSONObject need = new JSONObject().put("step", setup ? "setup" : "code").put("invalid", "totp_invalid".equals(err));

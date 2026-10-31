@@ -28,7 +28,7 @@
     <label class="stack">E-pošta<input id="login-email" type="email" autocomplete="username" spellcheck="false"></label>
     <label class="stack">Lozinka<input id="login-password" type="password" autocomplete="current-password"></label>
     <div class="newpw" id="login-newpw" hidden>
-      <p class="small"><b>Prva prijava:</b> ovo je početna lozinka. Upišite svoju novu lozinku – najmanje 10 znakova i barem tri vrste
+      <p class="small"><b>Aktivacija računa:</b> prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste
         znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.</p>
       <label class="stack">Nova lozinka<input class="np1" type="password" autocomplete="new-password"></label>
       <label class="stack">Ponovite novu lozinku<input class="np2" type="password" autocomplete="new-password"></label>
@@ -124,9 +124,9 @@
           <label class="w2">Adresa poslužitelja<input data-field="cloud_url" placeholder="https://solar.tvrtka.hr"><small>Cloudflare tunel (https://…) ili u lokalnoj mreži https://192.168.1.20:8700</small><span class="err" data-error="cloud_url"></span></label>
           <div class="w2 cloud-account" id="cloud-account"></div>
           <label class="w2 cloud-login">E-pošta<input id="cloud_email" type="email" autocomplete="username" spellcheck="false"></label>
-          <label class="w2 cloud-login">Lozinka<input id="cloud_password" type="password" autocomplete="current-password"><small>ne sprema se – aplikacija čuva samo šifriranu oznaku prijave</small></label>
+          <label class="w2 cloud-login">Lozinka ili aktivacijski kod<input id="cloud_password" type="password" autocomplete="current-password"><small>ne sprema se – aplikacija čuva samo šifriranu oznaku prijave</small></label>
           <div class="w4"><div class="newpw" id="cloud-newpw" hidden>
-      <p class="small"><b>Prva prijava:</b> ovo je početna lozinka. Upišite svoju novu lozinku – najmanje 10 znakova i barem tri vrste
+      <p class="small"><b>Aktivacija računa:</b> prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste
         znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.</p>
       <label class="stack">Nova lozinka<input class="np1" type="password" autocomplete="new-password"></label>
       <label class="stack">Ponovite novu lozinku<input class="np2" type="password" autocomplete="new-password"></label>
@@ -510,7 +510,8 @@
       <label class="toggle w4"><input type="checkbox" data-user="totp_required"><span></span>Dvofaktorska prijava (kod iz aplikacije autentifikatora, npr. Google Authenticator) – korisnik je postavlja pri sljedećoj prijavi skeniranjem QR koda</label>
     </div>
     <div class="totp-admin" id="user-pw-admin" hidden>
-      <button type="button" class="btn ghost" data-action="user-reset-password">Vrati početnu lozinku 12345678 (zaboravljena lozinka)</button>
+      <button type="button" class="btn ghost" data-action="user-reset-password">Novi aktivacijski kod (zaboravljena lozinka)</button>
+      <button type="button" class="btn ghost" data-action="user-logout-all">Odjavi sa svih uređaja</button>
     </div>
     <div class="totp-admin" id="user-totp-admin" hidden>
       <p class="muted small" id="user-totp-state"></p>

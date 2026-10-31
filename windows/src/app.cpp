@@ -287,13 +287,10 @@ std::optional<UserInfo> App::admin() const {
 
 json App::admin_login(const std::string& email, std::string password, const std::string& totp, std::string new_password) {
     const LoginResult r = users().login(email, std::move(password), "Solarni poslužitelj (ovo računalo)", now(), totp, std::move(new_password));
-    if (r.status == LoginResult::Status::PasswordChange) {
-        return {{"ok", false}, {"password_change", true}, {"message", tr("Ovo je početna lozinka – upišite svoju novu lozinku.")}};
+    if (r.status == LoginResult::Status::ActivationRequired) {
+        return {{"ok", false}, {"password_change", true}, {"message", tr("Aktivacijski kod je točan – postavite svoju lozinku.")}};
     }
     if (r.status == LoginResult::Status::PasswordInvalid) return {{"ok", false}, {"password_change", true}, {"message", r.problem}};
-    if (r.status == LoginResult::Status::PasswordExpired) {
-        return {{"ok", false}, {"message", tr("Početna lozinka je istekla (vrijedi 7 dana) – zamolite administratora da je postavi ponovno.")}};
-    }
     if (r.status == LoginResult::Status::TotpRequired || r.status == LoginResult::Status::TotpSetup ||
         r.status == LoginResult::Status::TotpInvalid) {
         json t = {{"step", r.status == LoginResult::Status::TotpSetup || !r.totp_uri.empty() ? "setup" : "code"},
@@ -305,10 +302,7 @@ json App::admin_login(const std::string& email, std::string password, const std:
                                                                          : tr("Upišite kod iz aplikacije autentifikatora.")}};
     }
     if (r.status == LoginResult::Status::Locked) {
-        return {{"ok", false}, {"message", tr("Previše pogrešnih lozinki – račun je zaključan do {time}.",
-                                              {{"time", std::to_string(local_tm(r.locked_until).tm_hour) + ":" +
-                                                            (local_tm(r.locked_until).tm_min < 10 ? "0" : "") +
-                                                            std::to_string(local_tm(r.locked_until).tm_min)}})}};
+        return {{"ok", false}, {"message", tr("Račun je privremeno zaključan zbog previše pogrešnih pokušaja.")}};
     }
     if (r.status == LoginResult::Status::Disabled) return {{"ok", false}, {"message", tr("Račun je blokiran.")}};
     if (r.status != LoginResult::Status::Ok) return {{"ok", false}, {"message", tr("Pogrešna e-pošta ili lozinka.")}};
@@ -333,7 +327,7 @@ json App::setup_admin(const UserInput& in) {
     if (users().has_admin()) return {{"ok", false}, {"message", tr("Administrator već postoji – prijavite se.")}};
     UserInput admin = in;
     admin.role = Role::Admin;
-    if (admin.password.empty()) {  // prvi administrator nikad nema početnu lozinku
+    if (admin.password.empty()) {  // prvi administrator uvijek upisuje vlastitu lozinku (nema aktivacijskog koda)
         return {{"ok", false}, {"errors", {{"password", tr("Upišite lozinku.")}}}, {"message", tr("Provjerite označena polja.")}};
     }
     try {

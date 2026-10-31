@@ -478,8 +478,8 @@ json user_row(App& app, const UserInfo& u) {
             {"role", role_name(u.role)}, {"disabled", u.disabled}, {"created", u.created}, {"last_login", u.last_login},
             {"locked", u.locked_until > now()}, {"sessions", app.users().active_sessions(u.id, now())},
             {"me", me && me->id == u.id}, {"totp_required", u.totp_required}, {"totp_enabled", u.totp_enabled},
-            {"recovery_left", u.recovery_left}, {"must_change_password", u.must_change_password},
-            {"default_expired", u.must_change_password && u.default_password_until < now()}};
+            {"recovery_left", u.recovery_left}, {"activation_pending", u.activation_pending},
+            {"activation_expired", u.activation_pending && u.activation_until < now()}};
 }
 
 json users_list(App& app) {
@@ -496,9 +496,10 @@ json user_save(App& app, const json& form) {
         return {{"ok", false}, {"errors", {{"role", tr("Ne možete sami sebi oduzeti administratorska prava.")}}},
                 {"message", tr("Provjerite označena polja.")}};
     }
+    std::string code;  // aktivacijski kod novog korisnika bez lozinke – prikazuje se samo jednom
     try {
         if (id) app.users().update(id, in, now());
-        else app.users().create(in, now());
+        else app.users().create(in, now(), &code);
     } catch (const UserError& e) {
         wipe(in.password);
         return {{"ok", false}, {"errors", e.fields}, {"message", tr("Provjerite označena polja.")}};
@@ -510,7 +511,9 @@ json user_save(App& app, const json& form) {
     json r = users_list(app);
     r["message"] = id ? (new_password ? tr("Spremljeno. Nova lozinka vrijedi odmah – korisnik se mora ponovno prijaviti.") : tr("Spremljeno."))
                       : new_password ? tr("Korisnik je dodan.")
-                                     : tr("Korisnik je dodan s početnom lozinkom 12345678 – pri prvoj prijavi mora je promijeniti (rok 7 dana).");
+                                     : tr("Korisnik je dodan. Aktivacijski kod (vrijedi 72 sata, prikazuje se samo sada): {code}", {{"code", code}});
+    if (!code.empty()) r["activation_code"] = code;
+    wipe(code);
     return r;
 }
 
@@ -531,10 +534,26 @@ json user_set_disabled(App& app, int64_t id, bool disabled) {
 json user_reset_password(App& app, int64_t id) {
     const auto me = app.admin();
     if (me && me->id == id) return fail(tr("Svoju lozinku promijenite tako da upišete novu."));
-    app.users().reset_to_default_password(id, now());
-    log_info("Korisnici: početna lozinka ponovno postavljena korisniku #" + std::to_string(id));
+    std::string code;
+    try {
+        code = app.users().issue_activation_code(id, now());
+    } catch (const UserError& e) {
+        return fail(e.what());
+    }
+    log_info("Korisnici: novi aktivacijski kod za korisnika #" + std::to_string(id));
     json r = users_list(app);
-    r["message"] = tr("Postavljena je početna lozinka 12345678 (vrijedi 7 dana) – korisnik je mora promijeniti pri prijavi.");
+    r["message"] = tr("Novi aktivacijski kod (vrijedi 72 sata, prikazuje se samo sada): {code}. Stara lozinka i sve prijave više ne vrijede.",
+                      {{"code", code}});
+    r["activation_code"] = code;
+    wipe(code);
+    return r;
+}
+
+json user_logout_all(App& app, int64_t id) {
+    app.users().revoke_all_sessions(id);
+    log_info("Korisnici: odjava svih uređaja korisnika #" + std::to_string(id));
+    json r = users_list(app);
+    r["message"] = tr("Korisnik je odjavljen sa svih uređaja.");
     return r;
 }
 
@@ -664,6 +683,7 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
         if (method == "user_delete") return async([&app, id = arg_int(args, 0)] { return user_delete(app, id); });
         if (method == "user_reset_totp") return async([&app, id = arg_int(args, 0)] { return user_reset_totp(app, id); });
         if (method == "user_reset_password") return async([&app, id = arg_int(args, 0)] { return user_reset_password(app, id); });
+        if (method == "user_logout_all") return async([&app, id = arg_int(args, 0)] { return user_logout_all(app, id); });
         if (method == "admin_logout") { app.admin_logout(); app.close_settings(); return reply(nullptr); }
     }
     if (method == "get_report") {

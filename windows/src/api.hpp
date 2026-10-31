@@ -5,7 +5,7 @@
 //
 //   GET  /api/v1/ping                     bez prijave: {"app","api":3,"setup"} – provjera veze i je li poslužitelj postavljen
 //   POST /api/v1/login                    {"email","password","device","totp","new_password"} → {"token","user"[,"recovery_codes"]}
-//                                         401 password_change (početna lozinka – pošalji new_password) | password_expired;
+//                                         401 activation_required (aktivacijski kod – pošalji new_password);
 //                                         400 password_invalid (+message)
 //                                         401 totp_required | totp_setup (+secret, uri za QR) | totp_invalid
 //   POST /api/v1/logout                   poništava oznaku iz zaglavlja

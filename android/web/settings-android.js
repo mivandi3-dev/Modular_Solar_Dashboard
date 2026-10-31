@@ -125,7 +125,7 @@ const actions = {
     const f = collect();
     const box = $("#newpw");
     let npw = "";
-    if (!box.hidden) {  // prva prijava: nova lozinka umjesto početne
+    if (!box.hidden) {  // aktivacija: vlastita lozinka umjesto jednokratnog koda
       npw = $(".np1", box).value;
       if (!npw || npw !== $(".np2", box).value) {
         setResult($("#test-result"), { ok: false, message: npw ? T("Lozinke se ne podudaraju.") : T("Upišite novu lozinku.") });

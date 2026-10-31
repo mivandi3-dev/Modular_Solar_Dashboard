@@ -4,6 +4,7 @@
 #include <mutex>
 
 #include "dashboard.hpp"
+#include "i18n.hpp"
 #include "images.hpp"
 #include "report.hpp"
 
@@ -102,9 +103,9 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
         if (!r.recovery_codes.empty()) ok["recovery_codes"] = r.recovery_codes;  // samo jednom, pri postavljanju
         return HttpResponse::json_body(200, ok);
     }
-    case LoginResult::Status::PasswordChange: return HttpResponse::json_body(401, {{"error", "password_change"}});
+    case LoginResult::Status::ActivationRequired:
+        return HttpResponse::json_body(401, {{"error", "activation_required"}, {"message", tr("Aktivacijski kod je točan – postavite svoju lozinku.")}});
     case LoginResult::Status::PasswordInvalid: return HttpResponse::json_body(400, {{"error", "password_invalid"}, {"message", r.problem}});
-    case LoginResult::Status::PasswordExpired: return HttpResponse::json_body(401, {{"error", "password_expired"}});
     case LoginResult::Status::TotpRequired: return totp_reply("totp_required");
     case LoginResult::Status::TotpSetup: return totp_reply("totp_setup");
     case LoginResult::Status::TotpInvalid:
@@ -112,13 +113,13 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
         return totp_reply("totp_invalid");
     case LoginResult::Status::Locked:
         count_failure(ip, t);
-        return HttpResponse::json_body(423, {{"error", "locked"}, {"until", r.locked_until}});
+        return HttpResponse::json_body(423, {{"error", "locked"}, {"message", tr("Račun je privremeno zaključan zbog previše pogrešnih pokušaja.")}});  // bez vremena (SMA-26)
     case LoginResult::Status::Disabled:
-        return HttpResponse::json_body(403, {{"error", "disabled"}});
+        return HttpResponse::json_body(403, {{"error", "disabled"}, {"message", tr("Račun je blokiran.")}});
     case LoginResult::Status::BadCredentials: break;
     }
     count_failure(ip, t);
-    return HttpResponse::json_body(401, {{"error", "bad_credentials"}});
+    return HttpResponse::json_body(401, {{"error", "bad_credentials"}, {"message", tr("Pogrešna e-pošta ili lozinka.")}});
 }
 
 HttpResponse change_password(UserStore& users, const UserInfo& me, const HttpRequest& req, const std::string& ip, std::time_t t) {

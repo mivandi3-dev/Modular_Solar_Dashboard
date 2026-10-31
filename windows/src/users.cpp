@@ -149,6 +149,17 @@ UserKeys load_or_create_user_keys(const fs::path& key_file) {
     return k;
 }
 
+namespace {
+std::string normalize_activation_code(const std::string& s) {
+    std::string out;
+    for (char c : s) {
+        if (c == '-' || c == ' ') continue;
+        out += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return out;
+}
+}  // namespace
+
 // ---------------------------------------------------------------- spremište
 struct UserStore::Row {
     int64_t id = 0;
@@ -207,9 +218,28 @@ UserStore::UserStore(const fs::path& db_path, UserKeys keys, uint32_t iterations
         throw std::runtime_error("SQLite: " + msg);
     }
     sqlite3_busy_timeout(db_, 5000);  // poslužitelj (servis) i prozor poslužitelja dijele bazu
+    // 4.0: baza 3.x (tablica users bez schema_version) se NE dira – ni PRAGMA ni ALTER (zaštita razvojnih podataka)
+    const auto has_table = [this](const char* name) {
+        Stmt q(db_, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
+        q.bind(1, std::string(name));
+        return q.step();
+    };
+    if (has_table("users") && !has_table("schema_version")) {
+        sqlite3_close(db_);
+        db_ = nullptr;
+        throw std::runtime_error(tr("Baza korisnika je iz starije razvojne verzije (3.x) i 4.0 je ne mijenja. "
+                                    "Premjestite je iz mape podataka i ponovno pokrenite poslužitelj (izradit će se nova)."));
+    }
     exec(db_, "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA secure_delete=ON;");
     exec(db_, kSchema);
     migrate();
+    exec(db_, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
+    Stmt v(db_, "SELECT COUNT(*) FROM schema_version");
+    if (v.step() && v.i64(0) == 0) {
+        Stmt ins(db_, "INSERT INTO schema_version (version) VALUES (?)");
+        ins.bind(1, static_cast<int64_t>(kUsersSchemaVersion));
+        ins.step();
+    }
 }
 
 // 3.1: stupci dvofaktorske prijave (baza iz 3.0 se nadogradi na mjestu)
@@ -259,8 +289,8 @@ UserInfo UserStore::info(const Row& r) {
     u.totp_enabled = r.totp_required && !r.totp_secret_enc.empty();
     const json codes = json::parse(r.recovery.empty() ? "[]" : r.recovery, nullptr, false);
     u.recovery_left = codes.is_array() ? static_cast<int>(codes.size()) : 0;
-    u.must_change_password = r.must_change;
-    u.default_password_until = r.must_change ? r.default_set_at + kDefaultPasswordSeconds : 0;
+    u.activation_pending = r.must_change;
+    u.activation_until = r.must_change ? r.default_set_at + kActivationSeconds : 0;
     return u;
 }
 
@@ -306,7 +336,8 @@ void UserStore::validate(const UserInput& in, bool require_password, std::option
     if (!err.empty()) throw UserError(std::move(err));
 }
 
-void UserStore::set_password_hash(int64_t id, const std::string& password, std::time_t now, bool must_change) {
+void UserStore::set_password_hash(int64_t id, const std::string& password, std::time_t now, bool activation) {
+    const bool must_change = activation;  // stupci must_change/default_set_at: aktivacija na čekanju i vrijeme izdavanja koda
     Bytes salt = random_bytes(kSaltBytes);
     Bytes hash = pbkdf2_sha256(password, salt, iterations_, kHashBytes);
     Stmt q(db_, "UPDATE users SET pw_salt = ?, pw_hash = ?, pw_iter = ?, failed = 0, locked_until = 0, updated = ?, must_change = ?,"
@@ -332,9 +363,9 @@ void UserStore::revoke_sessions(int64_t id) {
     q.step();
 }
 
-int64_t UserStore::create(const UserInput& in, std::time_t now) {
+int64_t UserStore::create(const UserInput& in, std::time_t now, std::string* activation_code) {
     std::lock_guard lock(mu_);
-    const bool initial = in.password.empty();  // bez lozinke: početna 12345678, mijenja se pri prvoj prijavi
+    const bool initial = in.password.empty();  // bez lozinke: jednokratni aktivacijski kod (SMA-03)
     validate(in, !initial, std::nullopt);
     exec(db_, "BEGIN IMMEDIATE");
     try {
@@ -345,7 +376,13 @@ int64_t UserStore::create(const UserInput& in, std::time_t now) {
             .bind(6, static_cast<int64_t>(now)).bind(7, static_cast<int64_t>(now)).bind(8, static_cast<int64_t>(in.totp_required ? 1 : 0));
         q.step();
         const int64_t id = sqlite3_last_insert_rowid(db_);
-        set_password_hash(id, initial ? std::string(kDefaultPassword) : in.password, now, initial);
+        if (initial) {
+            std::string code = new_activation_code(id, now);
+            if (activation_code) *activation_code = code;
+            wipe(code);
+        } else {
+            set_password_hash(id, in.password, now, false);
+        }
         exec(db_, "COMMIT");
         return id;
     } catch (...) {
@@ -441,14 +478,13 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
         wipe(password);
         return res;
     }
-    if (row->locked_until > now) {
-        wipe(password);
-        res.status = LoginResult::Status::Locked;
-        res.locked_until = row->locked_until;
+    // aktivacijski kod se uspoređuje bez crtica i razmaka, velikim slovima
+    const bool good = verify_password(*row, row->must_change ? normalize_activation_code(password) : password);
+    wipe(password);
+    if (row->locked_until > now) {  // zaključan: uz pogrešnu lozinku isto kao nepostojeći račun (SMA-13)
+        res.status = good ? LoginResult::Status::Locked : LoginResult::Status::BadCredentials;
         return res;
     }
-    const bool good = verify_password(*row, password);
-    wipe(password);
     if (!good) {
         count_failure(*row, now, res, LoginResult::Status::BadCredentials);
         return res;
@@ -458,19 +494,18 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
         return res;
     }
     std::optional<Row> current = row;
-    if (row->must_change) {  // početna lozinka: prije svega ostalog nova lozinka
-        if (now - row->default_set_at > kDefaultPasswordSeconds) {
+    if (row->must_change) {  // aktivacijski kod: prije svega ostalog vlastita lozinka
+        if (now - row->default_set_at > kActivationSeconds) {  // istekao kod: kao pogrešna lozinka (ne otkriva račun)
             wipe(new_password);
-            res.status = LoginResult::Status::PasswordExpired;
+            count_failure(*row, now, res, LoginResult::Status::BadCredentials);
             return res;
         }
         if (new_password.empty()) {
-            res.status = LoginResult::Status::PasswordChange;
+            res.status = LoginResult::Status::ActivationRequired;
             return res;
         }
         const std::string email_plain = open("email", row->email_enc);
         std::optional<std::string> problem = password_problem(new_password, email_plain);
-        if (!problem && new_password == kDefaultPassword) problem = tr("Nova lozinka mora se razlikovati od početne.");
         if (problem) {
             wipe(new_password);
             res.status = LoginResult::Status::PasswordInvalid;
@@ -479,7 +514,7 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
         }
         set_password_hash(row->id, new_password, now, false);
         wipe(new_password);
-        log_info("Korisnici: korisnik #" + std::to_string(row->id) + " je promijenio početnu lozinku");
+        log_info("Korisnici: korisnik #" + std::to_string(row->id) + " je aktivirao račun (vlastita lozinka)");
         current = row_by_id(row->id);
     }
     if (current->totp_required && !second_factor(*current, totp, now, res)) return res;
@@ -505,8 +540,8 @@ void UserStore::count_failure(const Row& r, std::time_t now, LoginResult& res, L
     Stmt q(db_, "UPDATE users SET failed = ?, locked_until = ? WHERE id = ?");
     q.bind(1, static_cast<int64_t>(until ? 0 : failed)).bind(2, static_cast<int64_t>(until)).bind(3, r.id);
     q.step();
-    res.status = until ? LoginResult::Status::Locked : status;
-    res.locked_until = until;
+    // uz pogrešnu lozinku zaključavanje se ne javlja (SMA-13, SMA-26); uz točnu lozinku i pogrešan kod (TOTP) smije
+    res.status = until && status != LoginResult::Status::BadCredentials ? LoginResult::Status::Locked : status;
 }
 
 // Drugi korak prijave; false = res sadrži razlog (treba kod, postavljanje, pogrešan kod ili zaključano)
@@ -581,9 +616,26 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
     return false;
 }
 
-void UserStore::reset_to_default_password(int64_t id, std::time_t now) {
+std::string UserStore::new_activation_code(int64_t id, std::time_t now) {
+    // 8 slučajnih bajtova → base32; prvih 12 znakova = 60 bita. Prikaz XXXX-XXXX-XXXX.
+    Bytes raw = random_bytes(8);
+    std::string code = base32(raw).substr(0, kActivationCodeChars);
+    wipe(raw);
+    set_password_hash(id, code, now, true);  // u bazi samo PBKDF2; poništava i sve prijave
+    std::string shown = code.substr(0, 4) + "-" + code.substr(4, 4) + "-" + code.substr(8, 4);
+    wipe(code);
+    return shown;
+}
+
+std::string UserStore::issue_activation_code(int64_t id, std::time_t now) {
     std::lock_guard lock(mu_);
-    set_password_hash(id, kDefaultPassword, now, true);  // poništava i sve prijave
+    if (!row_by_id(id)) throw UserError({{"general", tr("Korisnik ne postoji.")}});
+    return new_activation_code(id, now);
+}
+
+void UserStore::revoke_all_sessions(int64_t id) {
+    std::lock_guard lock(mu_);
+    revoke_sessions(id);
 }
 
 void UserStore::reset_totp(int64_t id, std::time_t now) {

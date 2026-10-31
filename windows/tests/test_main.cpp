@@ -1595,7 +1595,7 @@ TEST_CASE("korisnici: administrator, prijava, oznaka prijave i odjava") {
     CHECK(st.login("nema@primjer.hr", "Sunce-2026-ploce", "", 3000).status == LoginResult::Status::BadCredentials);
 }
 
-TEST_CASE("korisnici: prijava istječe nakon 30 dana nekorištenja i najkasnije nakon 180 dana") {
+TEST_CASE("korisnici: prijava istječe nakon 30 dana nekorištenja i najkasnije nakon 90 dana (SMA-11)") {
     TempDir dir;
     UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
     st.create(person("ana@primjer.hr"), 0);
@@ -1606,7 +1606,8 @@ TEST_CASE("korisnici: prijava istječe nakon 30 dana nekorištenja i najkasnije 
     const std::string t2 = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", 0).token;
     std::time_t now = 0;
     for (; now < kSessionMaxSeconds - kSessionIdleSeconds; now += kSessionIdleSeconds / 2) CHECK(st.session_user(t2, now));
-    CHECK_FALSE(st.session_user(t2, kSessionMaxSeconds + 1));                   // najdulje 180 dana
+    CHECK_FALSE(st.session_user(t2, kSessionMaxSeconds + 1));                   // najdulje 90 dana
+    CHECK(kSessionMaxSeconds == 90 * 24 * 3600);
 }
 
 TEST_CASE("korisnici: 5 pogrešnih lozinaka zaključava račun na 15 minuta") {
@@ -1614,9 +1615,10 @@ TEST_CASE("korisnici: 5 pogrešnih lozinaka zaključava račun na 15 minuta") {
     UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
     st.create(person("ana@primjer.hr"), 0);
     for (int i = 0; i < kMaxFailedLogins - 1; ++i) CHECK(st.login("ana@primjer.hr", "krivo", "", 100).status == LoginResult::Status::BadCredentials);
-    const LoginResult locked = st.login("ana@primjer.hr", "krivo", "", 100);
-    CHECK(locked.status == LoginResult::Status::Locked);
-    CHECK(locked.locked_until == 100 + kLockSeconds);
+    // peti pogrešan pokušaj zaključa račun, ali odgovor je isti kao za nepostojeći račun (SMA-13, SMA-26)
+    CHECK(st.login("ana@primjer.hr", "krivo", "", 100).status == LoginResult::Status::BadCredentials);
+    CHECK(st.login("ana@primjer.hr", "krivo", "", 150).status == LoginResult::Status::BadCredentials);
+    CHECK(st.login("nepostoji@primjer.hr", "krivo", "", 150).status == LoginResult::Status::BadCredentials);
     CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", 200).status == LoginResult::Status::Locked);  // ni ispravna
     CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", 100 + kLockSeconds + 1).status == LoginResult::Status::Ok);
     CHECK(st.login("ana@primjer.hr", "krivo", "", 2000).status == LoginResult::Status::BadCredentials);  // brojač ispočetka
@@ -1752,12 +1754,13 @@ TEST_CASE("korisnici 3.1: postavljanje dvofaktorske prijave QR kodom, prijava ko
     CHECK_FALSE(st.get(ana)->totp_required);
 }
 
-TEST_CASE("korisnici 3.1: tajna dvofaktorske prijave nije u bazi u čitljivom obliku; baza iz 3.0 se nadogradi") {
+TEST_CASE("korisnici 4.0: tajna dvofaktorske prijave nije u bazi u čitljivom obliku; baza 3.x se odbija bez izmjene") {
     TempDir dir;
-    // baza 3.0 (bez stupaca za TOTP)
+    // baza 3.x (tablica users bez schema_version) – razvojni podaci se ne smiju mijenjati
+    const fs::path old_db = dir.path / "stara.db";
     {
         sqlite3* db = nullptr;
-        sqlite3_open(narrow((dir.path / "users.db").wstring()).c_str(), &db);
+        sqlite3_open(narrow(old_db.wstring()).c_str(), &db);
         sqlite3_exec(db, "CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT NOT NULL, email_tag BLOB NOT NULL UNIQUE,"
                          " first_enc BLOB NOT NULL, last_enc BLOB NOT NULL, email_enc BLOB NOT NULL, pw_salt BLOB, pw_hash BLOB,"
                          " pw_iter INTEGER, disabled INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0,"
@@ -1765,18 +1768,26 @@ TEST_CASE("korisnici 3.1: tajna dvofaktorske prijave nije u bazi u čitljivom ob
                          " last_login INTEGER NOT NULL DEFAULT 0)", nullptr, nullptr, nullptr);
         sqlite3_close(db);
     }
+    const std::string before = read_file(old_db).value_or("");
+    REQUIRE_FALSE(before.empty());
     const UserKeys keys{random_bytes(32), random_bytes(32)};
+    CHECK_THROWS_WITH(UserStore(old_db, keys, kTestIterations), doctest::Contains("3.x"));
+    CHECK(read_file(old_db).value_or("") == before);  // bajt po bajt nepromijenjena
+    CHECK_FALSE(fs::exists(dir.path / "stara.db-wal"));
+
+    const fs::path db_path = dir.path / "users.db";
     std::string b32;
     {
-        UserStore st(dir.path / "users.db", keys, kTestIterations);
+        UserStore st(db_path, keys, kTestIterations);
         UserInput in = person("ana@primjer.hr", Role::Admin);
         in.totp_required = true;
         st.create(in, 0);
         b32 = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", 1000).totp_secret;
         REQUIRE_FALSE(b32.empty());
     }
+    { UserStore again(db_path, keys, kTestIterations); }  // nova baza ima schema_version – ponovno otvaranje radi
     std::string raw;
-    for (const auto& e : fs::directory_iterator(dir.path)) raw += read_file(e.path()).value_or("");
+    for (const auto& e : fs::directory_iterator(dir.path)) if (e.path().filename().string().rfind("users", 0) == 0) raw += read_file(e.path()).value_or("");
     CHECK(raw.find(b32) == std::string::npos);
     const Bytes s = *from_base32(b32);
     CHECK(raw.find(std::string(s.begin(), s.end())) == std::string::npos);
@@ -1933,46 +1944,69 @@ TEST_CASE("otočni uređaji: postavke serijskog porta, profili i mogućnosti") {
     CHECK(std::find(vic.begin(), vic.end(), "offgrid") != vic.end());  // napon baterije i AC potrošnja s GX-a
 }
 
-TEST_CASE("korisnici 3.3: početna lozinka 12345678 – obavezna promjena pri prvoj prijavi, rok 7 dana, administrator je vraća") {
+TEST_CASE("SMA-03: jednokratni aktivacijski kod umjesto zajedničke početne lozinke") {
     TempDir dir;
     UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
     UserInput in = person("ana@primjer.hr");
-    in.password.clear();  // bez lozinke = početna
-    const int64_t ana = st.create(in, 0);
-    CHECK(st.get(ana)->must_change_password);
-    CHECK(st.get(ana)->default_password_until == kDefaultPasswordSeconds);
-
-    // točna početna lozinka, ali bez nove: nema oznake prijave
-    LoginResult r = st.login("ana@primjer.hr", kDefaultPassword, "", 100);
-    CHECK(r.status == LoginResult::Status::PasswordChange);
-    CHECK(r.token.empty());
-    CHECK(st.login("ana@primjer.hr", "krivo", "", 100, "", "Nova-Lozinka-2026").status == LoginResult::Status::BadCredentials);
-    r = st.login("ana@primjer.hr", kDefaultPassword, "", 100, "", "kratka");
-    CHECK(r.status == LoginResult::Status::PasswordInvalid);
-    CHECK_FALSE(r.problem.empty());
-    CHECK(st.login("ana@primjer.hr", kDefaultPassword, "", 100, "", kDefaultPassword).status == LoginResult::Status::PasswordInvalid);
-    r = st.login("ana@primjer.hr", kDefaultPassword, "", 100, "", "Nova-Lozinka-2026");
-    REQUIRE(r.status == LoginResult::Status::Ok);
-    CHECK_FALSE(r.token.empty());
-    CHECK_FALSE(st.get(ana)->must_change_password);
-    CHECK(st.login("ana@primjer.hr", kDefaultPassword, "", 200).status == LoginResult::Status::BadCredentials);  // početna više ne vrijedi
-    CHECK(st.login("ana@primjer.hr", "Nova-Lozinka-2026", "", 200).status == LoginResult::Status::Ok);
-
-    // zaboravljena lozinka: administrator vraća početnu – stare prijave prestaju
-    st.reset_to_default_password(ana, 1000);
-    CHECK_FALSE(st.session_user(r.token, 1001));
-    CHECK(st.login("ana@primjer.hr", "Nova-Lozinka-2026", "", 1002).status == LoginResult::Status::BadCredentials);
-    CHECK(st.login("ana@primjer.hr", kDefaultPassword, "", 1002).status == LoginResult::Status::PasswordChange);
-    // rok od 7 dana
-    CHECK(st.login("ana@primjer.hr", kDefaultPassword, "", 1000 + kDefaultPasswordSeconds + 1, "", "Treca-Lozinka-2026").status ==
-          LoginResult::Status::PasswordExpired);
-
-    // s dvofaktorskom prijavom: najprije nova lozinka, zatim postavljanje aplikacije (s novom lozinkom)
+    in.password.clear();  // bez lozinke = aktivacijski kod
+    std::string code;
+    const int64_t ana = st.create(in, 0, &code);
+    REQUIRE(code.size() == 14);  // XXXX-XXXX-XXXX
+    CHECK(code[4] == '-');
+    CHECK(code[9] == '-');
+    CHECK(st.get(ana)->activation_pending);
+    CHECK(st.get(ana)->activation_until == kActivationSeconds);
+    // drugi korisnik dobiva drugi kod; zajednička lozinka ne postoji
     UserInput b = person("bruno@primjer.hr");
     b.password.clear();
-    b.totp_required = true;
-    st.create(b, 5000);
-    r = st.login("bruno@primjer.hr", kDefaultPassword, "", 5001, "", "Sunce-Lozinka-77");
+    std::string code_b;
+    st.create(b, 0, &code_b);
+    CHECK(code_b != code);
+    CHECK(st.login("ana@primjer.hr", "12345678", "", 10).status == LoginResult::Status::BadCredentials);
+    CHECK(st.login("ana@primjer.hr", code_b, "", 10).status == LoginResult::Status::BadCredentials);
+
+    // točan kod (i bez crtica, malim slovima), ali bez nove lozinke: nema oznake prijave
+    std::string loose = code;
+    loose.erase(std::remove(loose.begin(), loose.end(), '-'), loose.end());
+    for (auto& c : loose) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    LoginResult r = st.login("ana@primjer.hr", loose, "", 100);
+    CHECK(r.status == LoginResult::Status::ActivationRequired);
+    CHECK(r.token.empty());
+    r = st.login("ana@primjer.hr", code, "", 100, "", "kratka");
+    CHECK(r.status == LoginResult::Status::PasswordInvalid);
+    r = st.login("ana@primjer.hr", code, "", 100, "", "Nova-Lozinka-2026");
+    REQUIRE(r.status == LoginResult::Status::Ok);
+    CHECK_FALSE(st.get(ana)->activation_pending);
+    CHECK(st.login("ana@primjer.hr", code, "", 200).status == LoginResult::Status::BadCredentials);  // jednokratan
+    CHECK(st.login("ana@primjer.hr", "Nova-Lozinka-2026", "", 200).status == LoginResult::Status::Ok);
+
+    // zaboravljena lozinka: novi kod – stara lozinka i prijave prestaju
+    const std::string code2 = st.issue_activation_code(ana, 1000);
+    CHECK(code2 != code);
+    CHECK_FALSE(st.session_user(r.token, 1001));
+    CHECK(st.login("ana@primjer.hr", "Nova-Lozinka-2026", "", 1002).status == LoginResult::Status::BadCredentials);
+    CHECK(st.login("ana@primjer.hr", code2, "", 1002).status == LoginResult::Status::ActivationRequired);
+    // istek nakon 72 sata: isto kao pogrešna lozinka
+    CHECK(st.login("ana@primjer.hr", code2, "", 1000 + kActivationSeconds + 1, "", "Treca-Lozinka-2026").status ==
+          LoginResult::Status::BadCredentials);
+
+    // s dvofaktorskom prijavom: najprije vlastita lozinka, zatim postavljanje aplikacije
+    UserInput c = person("cvita@primjer.hr");
+    c.password.clear();
+    c.totp_required = true;
+    std::string code_c;
+    st.create(c, 5000, &code_c);
+    r = st.login("cvita@primjer.hr", code_c, "", 5001, "", "Sunce-Lozinka-77");
     CHECK(r.status == LoginResult::Status::TotpSetup);
-    CHECK(st.login("bruno@primjer.hr", "Sunce-Lozinka-77", "", 5002).status == LoginResult::Status::TotpSetup);  // lozinka je već nova
+    CHECK(st.login("cvita@primjer.hr", "Sunce-Lozinka-77", "", 5002).status == LoginResult::Status::TotpSetup);
+
+    // odjava svih uređaja (SMA-11)
+    const LoginResult rb = st.login("bruno@primjer.hr", code_b, "", 6000, "", "Sunce-Mjesec-2026");
+    REQUIRE(rb.status == LoginResult::Status::Ok);
+    const std::string tok2 = st.login("bruno@primjer.hr", "Sunce-Mjesec-2026", "", 6001).token;
+    CHECK(st.session_user(rb.token, 6002));
+    CHECK(st.session_user(tok2, 6002));
+    st.revoke_all_sessions(rb.user->id);
+    CHECK_FALSE(st.session_user(rb.token, 6003));
+    CHECK_FALSE(st.session_user(tok2, 6003));
 }

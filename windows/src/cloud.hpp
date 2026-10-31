@@ -31,7 +31,7 @@ private:
     json info_;
 };
 
-// Lozinka je početna (12345678): treba poslati novu (new_password) – prijava se ponavlja s njom
+// Prijava aktivacijskim kodom (4.0): treba poslati vlastitu lozinku (new_password) – prijava se ponavlja s njom
 class CloudPasswordChange : public CloudError {
     using CloudError::CloudError;
 };

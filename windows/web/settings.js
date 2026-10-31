@@ -173,7 +173,7 @@ function showTotp(box, info, out) {
   $(".totp-code", box).focus();
 }
 
-// prva prijava s početnom lozinkom: polja za novu lozinku; vraća novu lozinku, "" (blok skriven) ili null (ne podudaraju se)
+// aktivacija računa (jednokratni kod): polja za vlastitu lozinku; vraća novu lozinku, "" (blok skriven) ili null (ne podudaraju se)
 function newPassword(box, out) {
   if (box.hidden) return "";
   const a = $(".np1", box).value, b = $(".np2", box).value;
@@ -227,8 +227,8 @@ function renderUsers() {
     const pills = [u.role === "admin" ? `<span class="pill">${T("administrator")}</span>` : `<span class="pill off">${T("korisnik")}</span>`];
     if (u.disabled) pills.push(`<span class="pill bad">${T("blokiran")}</span>`);
     else if (u.locked) pills.push(`<span class="pill bad">${T("zaključan 15 min")}</span>`);
-    if (u.default_expired) pills.push(`<span class="pill bad">${T("početna lozinka istekla")}</span>`);
-    else if (u.must_change_password) pills.push(`<span class="pill warn">${T("mora promijeniti lozinku")}</span>`);
+    if (u.activation_expired) pills.push(`<span class="pill bad">${T("aktivacijski kod istekao")}</span>`);
+    else if (u.activation_pending) pills.push(`<span class="pill warn">${T("čeka aktivaciju")}</span>`);
     if (u.totp_enabled) pills.push(`<span class="pill ok">${T("2FA")}</span>`);
     else if (u.totp_required) pills.push(`<span class="pill warn">${T("2FA čeka postavljanje")}</span>`);
     if (u.me) pills.push(`<span class="pill ok">${T("vi")}</span>`);
@@ -270,7 +270,7 @@ function openUserDialog(u) {
   $('[data-user="role"]', root).disabled = Boolean(u && u.me);
   $('[data-user="password"]', root).value = $('[data-user="password2"]', root).value = "";
   $("#user-password-hint").textContent = u ? T("prazno = lozinka ostaje ista")
-    : T("prazno = početna lozinka 12345678 – korisnik je mora promijeniti pri prvoj prijavi (rok 7 dana)");
+    : T("prazno = jednokratni aktivacijski kod (vrijedi 72 sata) – prikazuje se nakon spremanja, korisnik njime postavlja svoju lozinku");
   $("#user-pw-admin").hidden = !(u && !u.me);
   $('[data-user="totp_required"]', root).checked = Boolean(u && u.totp_required);
   $("#user-totp-admin").hidden = !(u && u.totp_enabled);
@@ -459,7 +459,7 @@ const actions = {
     if (npw === null) return null;
     const res = await api.cloud_login({ cloud_url: $('[data-field="cloud_url"]').value, email: $("#cloud_email").value.trim(),
                                         password: $("#cloud_password").value, totp: $("#cloud-totp .totp-code").value, new_password: npw });
-    if (res.password_change) { showNewPassword($("#cloud-newpw"), true); return res; }  // početna lozinka – treba nova
+    if (res.password_change) { showNewPassword($("#cloud-newpw"), true); return res; }  // aktivacijski kod – treba vlastita lozinka
     if (npw) { $("#cloud_password").value = npw; showNewPassword($("#cloud-newpw"), false); }  // promijenjena – dalje s novom
     if (res.totp) { setResult($("#cloud-result"), res); showTotp($("#cloud-totp"), res.totp, $("#cloud-result")); return null; }  // lozinka ostaje do unosa koda
     $("#cloud_password").value = "";  // lozinka ne ostaje ni u obrascu
@@ -495,6 +495,16 @@ const actions = {
   }),
   "user-reset-password": (btn) => busy(btn, $("#user-result"), T("Spremam…"), async () => {
     const res = await api.user_reset_password(editing.id);
+    if (res.users) { users = res.users; renderUsers(); editing = users.find((x) => x.id === editing.id); }
+    if (res.activation_code) {
+      const box = document.createElement("div");
+      box.innerHTML = `<code style="user-select:all;font-size:1.3em">${esc(res.activation_code)}</code>`;
+      setTimeout(() => $("#user-result").appendChild(box), 0);
+    }
+    return res;
+  }),
+  "user-logout-all": (btn) => busy(btn, $("#user-result"), T("Spremam…"), async () => {
+    const res = await api.user_logout_all(editing.id);
     if (res.users) { users = res.users; renderUsers(); editing = users.find((x) => x.id === editing.id); }
     return res;
   }),
@@ -734,7 +744,7 @@ function startServerAuth() {
 
 $("#user-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const root = $("#user-dialog"), f = userForm(root), mismatch = passwordMismatch(f, false);  // novi bez lozinke = početna
+  const root = $("#user-dialog"), f = userForm(root), mismatch = passwordMismatch(f, false);  // novi bez lozinke = aktivacijski kod
   showUserErrors(root, mismatch);
   if (mismatch) return;
   if (editing) f.id = editing.id;
@@ -747,7 +757,18 @@ $("#user-form").addEventListener("submit", async (e) => {
     wipeUserForm(root);
     root.close();
     setResult($("#users-result"), res);
+    showActivationCode(res);
   }
 });
+
+// Aktivacijski kod (SMA-03) prikazuje se samo jednom – u zasebnom polju koje se lako označi i kopira
+function showActivationCode(res) {
+  if (!res || !res.activation_code) return;
+  const box = document.createElement("div");
+  box.className = "activation-code";
+  box.innerHTML = `<span>${T("Aktivacijski kod")}:</span> <code style="user-select:all;font-size:1.3em">${esc(res.activation_code)}</code>`;
+  $("#users-result").appendChild(box);
+}
+
 
 window.addEventListener("pywebviewready", start);
