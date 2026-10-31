@@ -26,6 +26,10 @@ ServerCert ensure_server_certificate(const std::wstring& name = kServerCertName)
 std::optional<ServerCert> find_server_certificate(const std::wstring& name = kServerCertName);  // bez izrade (prozor poslužitelja)
 void remove_server_certificate(const std::wstring& name);  // testovi
 std::string format_fingerprint(const std::string& raw_sha256);  // 32 bajta → "AB:CD:…"
+// Kod za uparivanje (4.0, SMA-04): prvih 60 bita SHA-256 otiska u base32 → "XXXX-XXXX-XXXX"; "" za neispravan otisak
+std::string pairing_code(const std::string& fingerprint);
+// Usporedba koda koji je korisnik upisao (bez crtica/razmaka, mala ili velika slova) s kodom otiska
+bool pairing_code_matches(const std::string& entered, const std::string& fingerprint);
 
 // Vjerodajnice SChannela za poslužitelj (jedne za sve veze)
 class TlsCredentials {

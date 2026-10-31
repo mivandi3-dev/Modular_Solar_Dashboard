@@ -171,6 +171,26 @@ std::string format_fingerprint(const std::string& raw) {
     return out;
 }
 
+std::string pairing_code(const std::string& fingerprint) {
+    Bytes raw;
+    for (size_t i = 0; i + 1 < fingerprint.size(); i += 3) {
+        const auto hex = [](char c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'A' && c <= 'F' ? c - 'A' + 10 : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1; };
+        const int hi = hex(fingerprint[i]), lo = hex(fingerprint[i + 1]);
+        if (hi < 0 || lo < 0 || (i + 2 < fingerprint.size() && fingerprint[i + 2] != ':')) return {};
+        raw.push_back(static_cast<uint8_t>(hi * 16 + lo));
+    }
+    if (raw.size() != 32) return {};
+    const std::string b32 = base32(Bytes(raw.begin(), raw.begin() + 8)).substr(0, 12);  // 60 bita
+    return b32.substr(0, 4) + "-" + b32.substr(4, 4) + "-" + b32.substr(8, 4);
+}
+
+bool pairing_code_matches(const std::string& entered, const std::string& fingerprint) {
+    std::string a, b;
+    for (char c : entered) if (c != '-' && c != ' ') a += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    for (char c : pairing_code(fingerprint)) if (c != '-') b += c;
+    return !b.empty() && equal_ct(Bytes(a.begin(), a.end()), Bytes(b.begin(), b.end()));
+}
+
 ServerCert ensure_server_certificate(const std::wstring& name) {
     bool machine = false;
     PCCERT_CONTEXT c = locate_or_create(name, &machine);

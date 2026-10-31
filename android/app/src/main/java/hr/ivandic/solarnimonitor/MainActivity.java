@@ -415,7 +415,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     ServerClient.Login l = ServerClient.login(url, f.optString("email"), f.optString("password"), prefs.knownPin(url),
-                                                              f.optString("totp"), f.optString("new_password"));
+                                                              f.optString("totp"), f.optString("new_password"), f.optString("pairing_code"));
                     logoutQuietly();  // prethodna prijava ne ostaje aktivna na poslužitelju
                     prefs.setLogin(url, l.token(), l.account(), l.pin());
                     JSONObject ok = result(true, "Prijavljeni ste kao {name}.");
@@ -425,6 +425,10 @@ public class MainActivity extends Activity {
                     ok.put("url", url);
                     if (l.recoveryCodes() != null) ok.put("recovery_codes", l.recoveryCodes());
                     callback(callbackId, ok);
+                } catch (ServerClient.PairingNeeded e) {
+                    JSONObject need = result(false, e.getMessage());
+                    try { need.put("pairing", true); } catch (JSONException ignored) { /* ne može se dogoditi */ }
+                    callback(callbackId, need);
                 } catch (ServerClient.PasswordChange e) {
                     JSONObject need = result(false, e.getMessage());
                     try { need.put("password_change", true); } catch (JSONException ignored) { /* ne može se dogoditi */ }

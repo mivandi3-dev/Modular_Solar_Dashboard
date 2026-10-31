@@ -125,7 +125,8 @@ json server_state(App& app) {
     }
     const auto me = app.admin();
     return {{"urls", urls}, {"in_app", app.api_port() != 0}, {"task", poller_task_installed()},
-            {"certificate", cert ? json{{"fingerprint", cert->fingerprint}, {"not_after", cert->not_after}} : json(nullptr)},
+            {"certificate", cert ? json{{"fingerprint", cert->fingerprint}, {"pairing_code", pairing_code(cert->fingerprint)},
+                                        {"not_after", cert->not_after}} : json(nullptr)},
             {"admin", me ? json{{"id", me->id}, {"name", me->first_name + " " + me->last_name}, {"email", me->email}} : json(nullptr)}};
 }
 
@@ -138,7 +139,7 @@ json cloud_login_call(App& app, const json& form) {
     try {
         const CloudLogin r = cloud_login(*url, form.value("email", std::string{}), std::move(password),
                                          cur.cloud_url == *url ? cur.cloud_cert_pin : std::string{}, form.value("totp", std::string{}),
-                                         form.value("new_password", std::string{}));
+                                         form.value("new_password", std::string{}), form.value("pairing_code", std::string{}));
         if (cur.cloud_url != *url || !cur.cloud_token_enc.empty()) cloud_logout(cur);  // stara prijava ne ostaje aktivna
         app.update_settings([&](Settings& s) {
             s.cloud_url = *url;
@@ -149,6 +150,8 @@ json cloud_login_call(App& app, const json& form) {
         log_info("Prijava na Solarni poslužitelj " + *url + (r.pin.empty() ? "" : " (otisak " + r.pin + ")"));
         return ok(tr("Prijavljeni ste kao {name}.", {{"name", r.account.value("name", "")}}),
                   {{"account", r.account}, {"pin", r.pin}, {"cloud_url", *url}, {"recovery_codes", r.recovery_codes}});
+    } catch (const CloudPairingNeeded& e) {
+        return fail(e.what(), {{"pairing", true}});
     } catch (const CloudTotpNeeded& e) {
         return fail(e.what(), {{"totp", e.info()}});
     } catch (const CloudPasswordChange& e) {

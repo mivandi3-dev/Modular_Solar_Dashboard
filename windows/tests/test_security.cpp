@@ -312,3 +312,21 @@ TEST_CASE("SMA-15: IPv6 se grupira po /64, neispravan zapis ne zaobilazi brojanj
     CHECK(rate_limit_key("1.2.3.4, 5.6.7.8") == "invalid");
     CHECK(rate_limit_key("") == "invalid");
 }
+
+// ---------------------------------------------------------------- SMA-04 (kod za uparivanje)
+#include "tls.hpp"
+
+TEST_CASE("SMA-04: kod za uparivanje – 12 znakova iz SHA-256 otiska, tolerantan unos, odbijanje drugog certifikata") {
+    const std::string fp = "8D:29:86:91:10:49:64:12:9B:D6:BC:56:6F:F3:F4:D2:2E:6F:28:89:1F:53:8F:AB:B2:EC:DC:0E:2C:1A:79:00";
+    const std::string code = pairing_code(fp);
+    CHECK(code == "RUUY-NEIQ-JFSB");  // base32 prvih 60 bita (8D 29 86 91 10 49 64 12 …)
+    CHECK(pairing_code_matches("ruuyneiqjfsb", fp));
+    CHECK(pairing_code_matches(" RUUY NEIQ JFSB ", fp));
+    CHECK_FALSE(pairing_code_matches("RUUY-NEIQ-JFSC", fp));
+    CHECK_FALSE(pairing_code_matches("", fp));
+    std::string other = fp;
+    other[1] = 'E';  // drugi certifikat (napadač u mreži)
+    CHECK_FALSE(pairing_code_matches(code, other));
+    CHECK(pairing_code("nije otisak").empty());
+    CHECK_FALSE(pairing_code_matches("", "nije otisak"));
+}

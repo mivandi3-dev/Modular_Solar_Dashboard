@@ -44,6 +44,42 @@ final class ServerClient {
         PasswordChange(String message) { super(message); }
     }
 
+    /** 4.0 (SMA-04): poslužitelj u lokalnoj mreži još nije uparen – treba kod za uparivanje s prozora poslužitelja. */
+    static final class PairingNeeded extends IOException {
+        PairingNeeded(String message) { super(message); }
+    }
+
+    /** Kod za uparivanje: prvih 60 bita SHA-256 otiska ("AB:CD:…") u base32 → "XXXX-XXXX-XXXX"; "" za neispravan otisak. */
+    static String pairingCode(String fingerprint) {
+        String[] parts = fingerprint == null ? new String[0] : fingerprint.split(":");
+        if (parts.length != 32) return "";
+        byte[] first = new byte[8];
+        try {
+            for (int i = 0; i < 8; i++) first[i] = (byte) Integer.parseInt(parts[i], 16);
+        } catch (NumberFormatException e) {
+            return "";
+        }
+        final String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        StringBuilder b32 = new StringBuilder();
+        int buffer = 0, bits = 0;
+        for (byte x : first) {
+            buffer = (buffer << 8) | (x & 0xFF);
+            bits += 8;
+            while (bits >= 5 && b32.length() < 12) {
+                b32.append(alphabet.charAt((buffer >> (bits - 5)) & 31));
+                bits -= 5;
+            }
+        }
+        return b32.substring(0, 4) + "-" + b32.substring(4, 8) + "-" + b32.substring(8, 12);
+    }
+
+    /** Upisani kod (mala/velika slova, s crticama ili bez) odgovara otisku – usporedba u stalnom vremenu. */
+    static boolean pairingMatches(String entered, String fingerprint) {
+        String expected = pairingCode(fingerprint).replace("-", "");
+        String given = entered == null ? "" : entered.replace("-", "").replace(" ", "").toUpperCase(java.util.Locale.ROOT);
+        return !expected.isEmpty() && MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII), given.getBytes(StandardCharsets.US_ASCII));
+    }
+
     /** Lozinka je točna, a račun ima dvofaktorsku prijavu: treba kod (step "code") ili postavljanje ("setup" + QR). */
     static final class TotpNeeded extends IOException {
         final JSONObject info;
@@ -149,6 +185,11 @@ final class ServerClient {
 
     /** /ping (otisak), zatim /login samo poslužitelju s istim otiskom. knownPin: otisak od prije (ista adresa). */
     static Login login(String base, String email, String password, String knownPin, String totp, String newPassword) throws IOException {
+        return login(base, email, password, knownPin, totp, newPassword, "");
+    }
+
+    static Login login(String base, String email, String password, String knownPin, String totp, String newPassword,
+                       String enteredPairingCode) throws IOException {
         Fetched p = request(base, "/api/v1/ping", "GET", "", null, knownPin);
         JSONObject info;
         try {
@@ -156,9 +197,15 @@ final class ServerClient {
         } catch (JSONException e) {
             throw new ServerException("Odgovor nije od Solarnog poslužitelja – provjerite adresu.");
         }
-        if (p.status() != 200 || info.optInt("api", 0) < 3) throw new ServerException("Poslužitelj je stare verzije – instalirajte Solarni poslužitelj 3.0.");
+        if (p.status() != 200 || info.optInt("api", 0) < 4) throw new ServerException("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.");
         if (!info.optBoolean("setup", false)) throw new ServerException("Poslužitelj još nema administratora – otvorite Solarni poslužitelj i izradite ga.");
         String pin = pinnedHost(base) ? p.certPin() : "";
+        // SMA-04: prvi kontakt u lokalnoj mreži – otisak se potvrđuje kodom s prozora poslužitelja; bez toga se lozinka ne šalje
+        if (pinnedHost(base) && (knownPin == null || knownPin.isEmpty()) && !pairingMatches(enteredPairingCode, pin)) {
+            throw new PairingNeeded(enteredPairingCode == null || enteredPairingCode.trim().isEmpty()
+                    ? "Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj)."
+                    : "Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze).");
+        }
         String body;
         try {
             body = new JSONObject().put("email", email.trim()).put("password", password).put("device", "Solarni monitor (Android)")

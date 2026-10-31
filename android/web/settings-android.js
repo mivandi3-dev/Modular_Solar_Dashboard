@@ -136,9 +136,11 @@ const actions = {
     setResult($("#test-result"), null, T("Prijavljujem se…"));
     const res = await callJava((id) => A.login(JSON.stringify({ url: f.mode === "local" ? f.local_url : f.cloud_url,
                                                                 email: $("#email").value.trim(), password: $("#password").value,
-                                                                totp: $("#totp .totp-code").value, new_password: npw }), id));
+                                                                totp: $("#totp .totp-code").value, new_password: npw,
+                                                                pairing_code: ($("#pairing") || { value: "" }).value.trim() }), id));
     btn.disabled = false;
     setResult($("#test-result"), { ok: res.ok, message: T(res.message, { name: res.name, code: res.code }) });
+    if (res.pairing && $("#pairing")) { $("#pairing").focus(); return; }  // SMA-04: kod za uparivanje je obavezan
     if (res.password_change) { box.hidden = false; $(".np1", box).focus(); box.scrollIntoView({ block: "center" }); return; }
     if (npw) { $("#password").value = npw; box.hidden = true; $$("input", box).forEach((i) => { i.value = ""; }); }  // dalje s novom
     if (res.totp) { showTotp(res.totp); if (!res.totp.invalid) $("#test-result").className = "result"; return; }  // lozinka ostaje do unosa koda

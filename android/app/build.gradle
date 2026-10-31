@@ -1,4 +1,4 @@
-// Web suÄelje (dashboard, widgeti, editor, prijevodi) kopira se iz verzija2/web pri svakoj izgradnji;
+// Web sučelje (dashboard, widgeti, editor, prijevodi) kopira se iz windows/web pri svakoj izgradnji;
 // Android dodaje svoj most (android/web/android-bridge.js) i stranicu postavki.
 plugins {
     id "com.android.application"
@@ -18,8 +18,8 @@ android {
         applicationId "hr.ivandic.solarnimonitor"
         minSdk 26
         targetSdk 36
-        versionCode 330
-        versionName "3.3.0"
+        versionCode 400
+        versionName "4.0.0"
     }
 
     signingConfigs {
@@ -48,6 +48,12 @@ android {
     sourceSets {
         main.assets.srcDirs += webAssets
     }
+}
+
+dependencies {
+    // samo za jedinične testove na računalu (JVM) – ne ulaze u APK
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.json:json:20240303"
 }
 
 def copyWeb = tasks.register("copyWeb", Sync) {

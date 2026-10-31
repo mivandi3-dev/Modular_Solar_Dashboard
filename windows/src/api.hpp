@@ -3,7 +3,7 @@
 // "Authorization: Bearer <oznaka prijave>" – inače 401 bez ikakvih podataka. Nakon 10 neuspjelih prijava ili
 // nevaljanih oznaka u 10 minuta adresa je blokirana 10 minuta (429). Iza tunela adresa klijenta je CF-Connecting-IP.
 //
-//   GET  /api/v1/ping                     bez prijave: {"app","api":3,"setup"} – provjera veze i je li poslužitelj postavljen
+//   GET  /api/v1/ping                     bez prijave: {"app","api":4,"setup"} – provjera veze i je li poslužitelj postavljen
 //   POST /api/v1/login                    {"email","password","device","totp","new_password"} → {"token","user"[,"recovery_codes"]}
 //                                         401 activation_required (aktivacijski kod – pošalji new_password);
 //                                         400 password_invalid (+message)
@@ -29,7 +29,7 @@
 
 namespace sm {
 
-inline constexpr int kApiVersion = 3;
+inline constexpr int kApiVersion = 4;  // 4.0: klijenti 4.0 odbijaju poslužitelj s api < 4
 inline constexpr wchar_t kServerServiceMutex[] = L"Global\\SolarniServerService";
 
 int run_server_service();  // src/service.cpp – radi dok se proces ne zaustavi

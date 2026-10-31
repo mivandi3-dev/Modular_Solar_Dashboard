@@ -207,17 +207,27 @@ json parse_server_json(const HttpResult& r) {
 }  // namespace
 
 CloudLogin cloud_login(const std::string& base_url, const std::string& email, std::string password, const std::string& known_pin,
-                       const std::string& totp, std::string new_password) {
+                       const std::string& totp, std::string new_password, const std::string& entered_code) {
     HttpCall ping;
     ping.path = "/api/v1/ping";
     ping.pin = known_pin;  // ista adresa kao prije: certifikat se ne smije promijeniti
     const HttpResult p = http_call(base_url, ping);
     const json info = p.status == 200 ? parse_server_json(p) : json::object();
-    if (info.value("api", 0) < 3) {
-        throw CloudError(p.status == 200 ? tr("Poslužitelj je stare verzije – instalirajte Solarni poslužitelj 3.0.")
+    if (info.value("api", 0) < 4) {
+        throw CloudError(p.status == 200 ? tr("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.")
                                          : tr("Poslužitelj je vratio grešku {code}.", {{"code", std::to_string(p.status)}}));
     }
     if (!info.value("setup", false)) throw CloudError(tr("Poslužitelj još nema administratora – otvorite Solarni poslužitelj i izradite ga."));
+
+    // SMA-04: prvi kontakt s poslužiteljem u lokalnoj mreži – otisak se potvrđuje kodom s prozora poslužitelja
+    // (TOFU ne postoji); bez točnog koda lozinka se ne šalje
+    if (pinned_host(base_url) && known_pin.empty() && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
+        wipe(password);
+        wipe(new_password);
+        throw CloudPairingNeeded(entered_code.empty()
+            ? tr("Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj).")
+            : tr("Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze)."));
+    }
 
     HttpCall login;
     login.method = "POST";

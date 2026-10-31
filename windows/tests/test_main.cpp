@@ -477,7 +477,7 @@ TEST_CASE("API 3.0: bez prijave nema podataka; prijava e-poštom i lozinkom daje
 
     users.create(person("admin@primjer.hr", Role::Admin), now());
     const json ping = json::parse(handler(api_request("/api/v1/ping", "")).body);
-    CHECK(ping["api"] == 3);
+    CHECK(ping["api"] == 4);
     CHECK(ping["setup"] == true);
     CHECK_FALSE(ping.contains("plant"));  // bez prijave ništa o elektrani
 
@@ -604,8 +604,17 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     REQUIRE(port);
     const std::string url = "https://127.0.0.1:" + std::to_string(port);
 
-    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "krivo", ""), CloudError);
-    const CloudLogin login = cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", "");
+    // SMA-04: bez koda za uparivanje (ili s pogrešnim) lozinka se ne šalje
+    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", ""), CloudPairingNeeded);
+    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", "", {}, {}, "AAAA-BBBB-CCCC"), CloudPairingNeeded);
+    const std::string code = pairing_code(cert.fingerprint);
+    REQUIRE(code.size() == 14);
+    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "krivo", "", {}, {}, code), CloudError);
+    std::string loose = code;  // kod se smije upisati malim slovima i bez crtica
+    loose.erase(std::remove(loose.begin(), loose.end(), '-'), loose.end());
+    for (auto& c : loose) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const CloudLogin login = cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", "", {}, {}, loose);
+    CHECK(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", login.pin).pin == cert.fingerprint);  // upareno: kod više ne treba
     CHECK(login.pin == cert.fingerprint);
     CHECK(login.account["name"] == "Ana Horvat");
     CHECK(login.token.size() == 43);
@@ -614,7 +623,7 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     s.cloud_url = url;
     s.cloud_token_enc = protect_secret(login.token);
     s.cloud_cert_pin = login.pin;
-    CHECK(cloud_json(s, "/api/v1/info")["api"] == 3);
+    CHECK(cloud_json(s, "/api/v1/info")["api"] == 4);
 
     // drugi certifikat (npr. netko u mreži): veza se prekida PRIJE slanja oznake – poslužitelj zahtjev ne vidi
     const int before = secret_requests;
@@ -628,7 +637,7 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     Settings plain = s;
     plain.cloud_url = "http://127.0.0.1:" + std::to_string(port);
     plain.cloud_cert_pin.clear();
-    CHECK(cloud_json(plain, "/api/v1/info")["api"] == 3);
+    CHECK(cloud_json(plain, "/api/v1/info")["api"] == 4);
     server.stop();
 }
 

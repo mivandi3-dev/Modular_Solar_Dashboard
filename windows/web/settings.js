@@ -134,7 +134,8 @@ function renderServer() {
   $("#admin-who").innerHTML = srv.admin ? T("Prijavljeni ste kao {name} ({email}).", { name: `<b>${esc(srv.admin.name)}</b>`, email: esc(srv.admin.email) }) : "";
   $("#server-urls").innerHTML = T("Adrese API-ja: {urls}", { urls: srv.urls.map((u) => `<code>${esc(u)}</code>`).join(" · ") });
   $("#server-cert").innerHTML = srv.certificate
-    ? T("HTTPS certifikat (otisak SHA-256): {fp} – vrijedi do {date}.",
+    ? T("Kod za uparivanje klijenata: {code}", { code: `<b style="font-size:1.4em;letter-spacing:.08em;user-select:all">${esc(srv.certificate.pairing_code)}</b>` })
+      + "<br>" + T("HTTPS certifikat (otisak SHA-256): {fp} – vrijedi do {date}.",
         { fp: `<code>${esc(srv.certificate.fingerprint)}</code>`, date: esc(srv.certificate.not_after) })
     : T("HTTPS certifikat bit će izrađen kad uključite pristup iz lokalne mreže.");
   $("#server-status").innerHTML = srv.task
@@ -465,7 +466,9 @@ const actions = {
     const npw = newPassword($("#cloud-newpw"), $("#cloud-result"));
     if (npw === null) return null;
     const res = await api.cloud_login({ cloud_url: $('[data-field="cloud_url"]').value, email: $("#cloud_email").value.trim(),
-                                        password: $("#cloud_password").value, totp: $("#cloud-totp .totp-code").value, new_password: npw });
+                                        password: $("#cloud_password").value, totp: $("#cloud-totp .totp-code").value, new_password: npw,
+                                        pairing_code: $("#cloud_pairing").value.trim() });
+    if (res.pairing) { $("#cloud_pairing").focus(); return res; }  // SMA-04: kod za uparivanje je obavezan
     if (res.password_change) { showNewPassword($("#cloud-newpw"), true); return res; }  // aktivacijski kod – treba vlastita lozinka
     if (npw) { $("#cloud_password").value = npw; showNewPassword($("#cloud-newpw"), false); }  // promijenjena – dalje s novom
     if (res.totp) { setResult($("#cloud-result"), res); showTotp($("#cloud-totp"), res.totp, $("#cloud-result")); return null; }  // lozinka ostaje do unosa koda

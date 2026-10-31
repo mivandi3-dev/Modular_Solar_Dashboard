@@ -31,6 +31,11 @@ private:
     json info_;
 };
 
+// Adresa u lokalnoj mreži bez uparenog certifikata: treba kod za uparivanje s prozora poslužitelja (SMA-04)
+class CloudPairingNeeded : public CloudError {
+    using CloudError::CloudError;
+};
+
 // Prijava aktivacijskim kodom (4.0): treba poslati vlastitu lozinku (new_password) – prijava se ponavlja s njom
 class CloudPasswordChange : public CloudError {
     using CloudError::CloudError;
@@ -57,8 +62,9 @@ struct CloudLogin {
     std::vector<std::string> recovery_codes;  // samo odmah nakon postavljanja dvofaktorske prijave
 };
 // Prijava: /ping (otisak), zatim /login samo poslužitelju s istim otiskom. known_pin: otisak od prije (ista adresa).
+// 4.0: pairing_code = kod koji je korisnik upisao s prozora poslužitelja; obavezan kad otisak još nije poznat (LAN)
 CloudLogin cloud_login(const std::string& base_url, const std::string& email, std::string password, const std::string& known_pin,
-                       const std::string& totp = {}, std::string new_password = {});
+                       const std::string& totp = {}, std::string new_password = {}, const std::string& pairing_code = {});
 void cloud_logout(const Settings& s);  // poništava oznaku na poslužitelju (ne baca)
 
 // JSON s poslužitelja prema postavkama klijenta (cloud_url, cloud_token_enc, cloud_cert_pin)
