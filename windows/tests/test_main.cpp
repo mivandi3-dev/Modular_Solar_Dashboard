@@ -331,7 +331,7 @@ TEST_CASE("DPAPI: lozinka se ne sprema u čistom tekstu") {
     CHECK(unprotect_secret("dpapi:AAAA").empty());
 }
 
-TEST_CASE("pregled iz mreže: samo datoteke programa i slika, bez izlaska iz mape") {
+TEST_CASE("pregled iz mreže: bez izlaska iz mape (4.0: vidi i SMA-27 u test_security.cpp)") {
     CHECK(resolve_remote_path("/web/../config.json") == std::nullopt);
     CHECK(resolve_remote_path("/web/%2e%2e/config.json") == std::nullopt);
     CHECK(resolve_remote_path("/data/../../config.json") == std::nullopt);

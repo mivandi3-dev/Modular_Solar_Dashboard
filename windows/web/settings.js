@@ -119,6 +119,13 @@ function renderSystem() {
   $("#remote-urls").innerHTML = urls.length
     ? T("Adrese za preglednik: {urls}", { urls: urls.map((u) => `<code>${esc(u)}</code>`).join(" · ") })
     : T("Nema mrežne kartice s IPv4 adresom.");
+  // 4.0 (SMA-08): pristupni ključ – preglednik ga traži pri prvom otvaranju
+  const keyBox = $("#remote-key");
+  if (keyBox) keyBox.innerHTML = state.remote_view_key
+    ? `${T("Pristupni ključ (upišite ga u preglednik)")}: <code style="user-select:all">${esc(state.remote_view_key)}</code>
+       <button type="button" class="btn ghost" data-action="remote-new-key">${T("Novi ključ")}</button>
+       <br><small class="muted">${T("Pregled iz mreže je obični HTTP – koristite ga samo u pouzdanoj lokalnoj mreži.")}</small>`
+    : "";
 }
 
 function renderServer() {
@@ -501,6 +508,11 @@ const actions = {
       box.innerHTML = `<code style="user-select:all;font-size:1.3em">${esc(res.activation_code)}</code>`;
       setTimeout(() => $("#user-result").appendChild(box), 0);
     }
+    return res;
+  }),
+  "remote-new-key": (btn) => busy(btn, $("#remote-urls"), T("Spremam…"), async () => {
+    const res = await api.remote_view_new_key();
+    if (res.ok) { state.remote_view_key = res.remote_view_key; renderSystem(); }
     return res;
   }),
   "user-logout-all": (btn) => busy(btn, $("#user-result"), T("Spremam…"), async () => {

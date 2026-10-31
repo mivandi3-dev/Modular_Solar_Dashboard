@@ -56,7 +56,9 @@ public:
     void quit();
     void reload_dashboard();
     void apply_settings(const Settings& s);  // spremi i primijeni (u čarobnjaku otvara dashboard)
-    void update_settings(const std::function<void(Settings&)>& change);  // samo izmjena i spremanje (prijava na poslužitelj)
+    void update_settings(const std::function<void(Settings&)>& change);
+    std::string new_remote_view_key();   // pregled iz mreže (SMA-08): novi ključ, sprema se šifriran
+    std::string remote_view_key() const;  // samo izmjena i spremanje (prijava na poslužitelj)
     void set_display(bool on);               // noćni način (web/overlay.js): ugasi ili upali zaslon
     // prozor bez okvira (web/window.js): minimize | maximize | close | drag; stanje za kružiće
     void window_control(WindowKind kind, const std::string& action);

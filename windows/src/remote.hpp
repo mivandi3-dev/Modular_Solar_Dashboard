@@ -1,19 +1,25 @@
 // Mali HTTP poslužitelj (Winsock) i dva rukovatelja:
 //   * pregled iz mreže (Postavke → Sustav): dashboard samo za čitanje u pregledniku
 //       GET /                 → /web/index.html (bez editora i prečaca)
-//       GET /web/…, /assets/… → datoteke iz mape programa;  GET /data/<slika> → vlastite slike
-//       GET /api/dashboard    → podaci (isti JSON kao get_dashboard u aplikaciji)
+//       GET /web/<datoteka s popisa> → samo datoteke dashboarda (allowlista, SMA-27)
+//       GET /api/dashboard, /api/image/{hero,drawing,logo} → samo uz zaglavlje X-Solari-View-Key (SMA-08)
 //   * API poslužitelja (src/api.cpp) – prijava korisnika i oznaka prijave (Bearer)
-// Zahtjevi se obrađuju jedan po jedan (nekoliko klijenata osvježava se svakih 10 s).
+// 4.0 (SMA-07): ograničen skup radnih niti, red ograničene duljine, najviše 4 veze po IP adresi i ukupni rok
+// po vezi (nadzorna nit prekida vezu koja traje dulje – i za vrijeme TLS rukovanja), pa spori klijent ne blokira ostale.
 #pragma once
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -61,20 +67,35 @@ public:
 
 private:
     void run(uintptr_t listener);
+    void worker();
+    void watchdog();
     void serve(uintptr_t client, const std::string& peer);
     void handle(Conn& client, const std::string& peer);
+    struct Pending {
+        uintptr_t socket;
+        std::string peer;
+    };
 
     NetInit net_;  // Winsock dok poslužitelj postoji
     Handler handler_;
     std::shared_ptr<TlsCredentials> tls_;
     std::thread thread_;
+    std::vector<std::thread> workers_;
+    std::thread watchdog_;
+    std::mutex mu_;                        // red, brojač po IP-u i rokovi veza
+    std::condition_variable cv_;
+    std::deque<Pending> queue_;
+    std::map<std::string, int> per_ip_;    // aktivne veze (u redu + u obradi) po IP adresi
+    std::map<uintptr_t, std::chrono::steady_clock::time_point> deadlines_;  // veze u obradi
     std::atomic<bool> stop_{false};
     int port_ = 0;
     bool lan_ = false;
 };
 
-// Pregled iz mreže: datoteke programa i slika te /api/dashboard (bez ključa – samo lokalna mreža).
-HttpServer::Handler remote_view_handler(std::function<nlohmann::json()> data);
+// 4.0: podaci i slike samo uz zaglavlje X-Solari-View-Key (key() = važeći ključ; prazan = pristup zatvoren)
+HttpServer::Handler remote_view_handler(std::function<nlohmann::json()> data, std::function<std::string()> key);
+// JSON za mrežu (pregled iz mreže i /api/v1/dashboard): bez adrese uređaja i adresa na sabirnici (SMA-08)
+nlohmann::json public_dashboard(nlohmann::json d);
 
 // Putanja zahtjeva → datoteka na disku (nullopt = nije dopušteno ili ne postoji). Testira se zasebno.
 std::optional<std::wstring> resolve_remote_path(const std::string& url_path);

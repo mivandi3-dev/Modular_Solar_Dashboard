@@ -47,7 +47,7 @@ bool settings_only_method(const std::string& method) {
         "save",            "test_email",       "cloud_login",     "cloud_logout",      "users_list",
         "user_save",       "user_set_disabled", "user_delete",    "user_reset_totp",   "user_reset_password", "user_logout_all",
         "get_report",      "save_report_csv",  "import_history",  "import_smartlogger", "choose_image",
-        "reset_image",     "open_folder",      "close"};
+        "reset_image",     "open_folder",      "close",           "remote_view_new_key"};
     return kSettingsOnly.count(method) > 0;
 }
 

@@ -46,4 +46,7 @@ struct ApiContext {
 };
 HttpServer::Handler api_handler(ApiContext ctx);
 
+// Ključ ograničenja po adresi: IPv4 kakav jest, IPv6 po /64, neispravno → "invalid" (SMA-15). Testira se zasebno.
+std::string rate_limit_key(const std::string& ip);
+
 }  // namespace sm

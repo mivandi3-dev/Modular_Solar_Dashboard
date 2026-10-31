@@ -1,7 +1,10 @@
 #include "api.hpp"
 
+#include <cctype>
+#include <iterator>
 #include <map>
 #include <mutex>
+#include <vector>
 
 #include "dashboard.hpp"
 #include "i18n.hpp"
@@ -13,6 +16,7 @@ namespace sm {
 namespace {
 
 constexpr int kFailWindowS = 600, kMaxFailures = 10, kBlockS = 600;
+constexpr size_t kMaxTrackedAddresses = 10'000;
 constexpr size_t kMaxDeviceLength = 120;
 
 struct Failures {
@@ -22,10 +26,60 @@ struct Failures {
 std::mutex g_mutex;
 std::map<std::string, Failures> g_failures;
 
+}  // namespace
+
+// Ključ za ograničenje po adresi (SMA-15): IPv6 se grupira po /64 (jedan priključak dobiva cijeli /64);
+// neispravan zapis → jedan zajednički ključ (ne može se koristiti za zaobilaženje brojanja).
+std::string rate_limit_key(const std::string& ip) {
+    if (ip.find(':') == std::string::npos) {
+        for (char c : ip) if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.') return "invalid";
+        return ip.empty() ? "invalid" : ip;
+    }
+    std::vector<std::string> groups;
+    std::string cur;
+    size_t gap = std::string::npos;  // položaj "::"
+    for (size_t i = 0; i < ip.size(); ++i) {
+        const char c = ip[i];
+        if (c == ':') {
+            if (i + 1 < ip.size() && ip[i + 1] == ':') {
+                if (gap != std::string::npos) return "invalid";
+                if (!cur.empty() || i > 0) groups.push_back(cur);
+                cur.clear();
+                gap = groups.size();
+                ++i;
+                continue;
+            }
+            groups.push_back(cur);
+            cur.clear();
+        } else if (std::isxdigit(static_cast<unsigned char>(c))) {
+            cur += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (cur.size() > 4) return "invalid";
+        } else {
+            return "invalid";
+        }
+    }
+    if (!cur.empty()) groups.push_back(cur);
+    std::vector<std::string> full;
+    if (gap != std::string::npos) {
+        if (groups.size() > 7) return "invalid";
+        full.assign(groups.begin(), groups.begin() + static_cast<std::ptrdiff_t>(gap));
+        full.insert(full.end(), 8 - groups.size(), "0");
+        full.insert(full.end(), groups.begin() + static_cast<std::ptrdiff_t>(gap), groups.end());
+    } else {
+        full = groups;
+    }
+    if (full.size() != 8) return "invalid";
+    std::string key = "v6:";
+    for (int i = 0; i < 4; ++i) key += (i ? ":" : "") + (full[i].empty() ? std::string("0") : full[i]);
+    return key + "::/64";
+}
+
+namespace {
+
 std::string client_ip(const HttpRequest& req) {
-    // cloudflared na istom računalu: stvarni klijent je u CF-Connecting-IP
-    const std::string cf = req.header("CF-Connecting-IP");
-    return req.peer == "127.0.0.1" && !cf.empty() ? cf : req.peer;
+    // cloudflared na istom računalu: stvarni klijent je u CF-Connecting-IP (samo s loopbacka)
+    const std::string cf = trim(req.header("CF-Connecting-IP"));
+    return rate_limit_key(req.peer == "127.0.0.1" && !cf.empty() ? cf : req.peer);
 }
 
 bool blocked(const std::string& ip, std::time_t t) {
@@ -42,7 +96,16 @@ void count_failure(const std::string& ip, std::time_t t) {
         f.blocked_until = t + kBlockS;
         log_warn("API: previše neuspjelih prijava s adrese " + ip + " – blokirano " + std::to_string(kBlockS / 60) + " min");
     }
-    if (g_failures.size() > 10'000) g_failures.clear();  // zaštita memorije
+    if (g_failures.size() > kMaxTrackedAddresses) {  // zaštita memorije (SMA-15): brišu se samo istekli zapisi
+        for (auto it = g_failures.begin(); it != g_failures.end();) {
+            const bool expired = it->second.blocked_until <= t && t - it->second.window_start > kFailWindowS;
+            it = expired ? g_failures.erase(it) : std::next(it);
+        }
+        // i dalje previše (napad s mnogo adresa): brišu se najstariji neblokirani, aktivne blokade ostaju
+        for (auto it = g_failures.begin(); g_failures.size() > kMaxTrackedAddresses && it != g_failures.end();) {
+            it = it->second.blocked_until > t ? std::next(it) : g_failures.erase(it);
+        }
+    }
 }
 
 void clear_failures(const std::string& ip) {
@@ -175,7 +238,7 @@ HttpServer::Handler api_handler(ApiContext ctx) {
                                                      {"plant", s.plant_name}, {"location", s.location}});
             }
             if (req.path == "/api/v1/dashboard") {
-                json d = build_dashboard(*ctx.data, *ctx.weather, *ctx.catalog, s);
+                json d = public_dashboard(build_dashboard(*ctx.data, *ctx.weather, *ctx.catalog, s));  // SMA-08
                 d["images"] = {{"hero", api_image_url("hero")}, {"drawing", api_image_url("drawing")}, {"logo", api_image_url("logo")}};
                 d["user"] = user_json(*me);
                 return HttpResponse::json_body(200, d);

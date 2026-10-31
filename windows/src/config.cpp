@@ -122,7 +122,7 @@ json to_json(const Settings& s, bool include_pin_hash) {
         {"hide_idle_cursor", s.hide_idle_cursor}, {"keep_awake", s.keep_awake}, {"backup_keep_days", s.backup_keep_days},
         {"price_kwh", s.price_kwh}, {"feedin_price_kwh", s.feedin_price_kwh}, {"currency", s.currency},
         {"night_mode", s.night_mode}, {"night_from", s.night_from}, {"night_to", s.night_to},
-        {"remote_view", s.remote_view}, {"remote_port", s.remote_port}, {"alert_emails", s.alert_emails},
+        {"remote_view", s.remote_view}, {"remote_port", s.remote_port}, {"remote_view_key_enc", s.remote_view_key_enc}, {"alert_emails", s.alert_emails},
         {"smtp_host", s.smtp_host}, {"smtp_port", s.smtp_port}, {"smtp_security", s.smtp_security},
         {"smtp_user", s.smtp_user}, {"smtp_password_enc", s.smtp_password_enc}, {"smtp_from", s.smtp_from},
         {"alert_offline_min", s.alert_offline_min}, {"alert_low_production", s.alert_low_production},
@@ -185,6 +185,7 @@ Settings settings_from_json(const json& j) {
     read(j, "night_to", s.night_to);
     read(j, "remote_view", s.remote_view);
     read(j, "remote_port", s.remote_port);
+    read(j, "remote_view_key_enc", s.remote_view_key_enc);
     read(j, "alert_emails", s.alert_emails);
     read(j, "smtp_host", s.smtp_host);
     read(j, "smtp_port", s.smtp_port);
@@ -294,6 +295,7 @@ json to_form(const Settings& s) {
     json j = to_json(s, false);
     j.erase("smtp_password_enc");
     j.erase("cloud_token_enc");
+    j.erase("remote_view_key_enc");
     j.erase("cloud_account_enc");
     const json account = json::parse(unprotect_secret(s.cloud_account_enc), nullptr, false);
     j["cloud_account"] = !s.cloud_token_enc.empty() && account.is_object() ? account : json(nullptr);

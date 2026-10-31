@@ -141,3 +141,130 @@ TEST_CASE("SMA-10: preusmjeravanje se ne slijedi i oznaka prijave ne odlazi drug
     CHECK_THROWS_AS(http_call("http://127.0.0.1:" + std::to_string(port), call), CloudError);
     CHECK(target_hits == 0);
 }
+
+// ---------------------------------------------------------------- SMA-07, SMA-08, SMA-16, SMA-27 (HTTP i pregled iz mreže)
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#include "net.hpp"
+
+namespace {
+
+int start_on_free_port(HttpServer& s, int from) {
+    for (int p = from; p < from + 60; ++p) if (s.start(p, false)) return p;
+    return 0;
+}
+
+SOCKET connect_local(int port) {
+    SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(static_cast<u_short>(port));
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(s, reinterpret_cast<sockaddr*>(&a), sizeof a) != 0) {
+        closesocket(s);
+        return INVALID_SOCKET;
+    }
+    DWORD tmo = 5000;
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tmo), sizeof tmo);
+    return s;
+}
+
+// Pošalje sirovi zahtjev i vrati cijeli odgovor ("" = veza zatvorena bez odgovora)
+std::string raw_request(int port, const std::string& request) {
+    SOCKET s = connect_local(port);
+    if (s == INVALID_SOCKET) return {};
+    send(s, request.data(), static_cast<int>(request.size()), 0);
+    std::string out;
+    char buf[4096];
+    for (int n; (n = recv(s, buf, sizeof buf, 0)) > 0;) out.append(buf, static_cast<size_t>(n));
+    closesocket(s);
+    return out;
+}
+
+int status_of(const std::string& response) {
+    return response.size() > 12 ? std::atoi(response.substr(9, 3).c_str()) : 0;
+}
+
+}  // namespace
+
+TEST_CASE("SMA-27: pregled iz mreže poslužuje samo datoteke s popisa") {
+    // dopušteno (datoteke postoje u mapi gradnje: web\ se kopira uz program)
+    CHECK(resolve_remote_path("/web/index.html"));
+    CHECK(resolve_remote_path("/web/i18n/en.json"));
+    CHECK(resolve_remote_path("/web/vendor/plotly-basic.min.js"));
+    // sve ostalo nedostupno – i stvarno postojeće datoteke programa
+    for (const char* p : {"/web/settings.html", "/web/settings.js", "/web/editor.js", "/web/overlay.js", "/web/vendor/qrcode.js",
+                          "/web/../SolarniMonitor.exe", "/web/../solari_tests.exe", "/web/%2e%2e/config.json",
+                          "/web/..%5cconfig.json", "/web/i18n\..\..\config.json", "/web/INDEX.HTML", "/web/index.html::$DATA",
+                          "/web/INDEX~1.HTM", "/web/index.html.", "/data/logo.png", "/data/../solar.db", "/assets/logo.png",
+                          "/web/", "/web", "/config.json", "/data/solar.db", "/data/backups/solar.db", "/data/logs/x.log",
+                          "/alerts.json", "C:/Windows/win.ini", "/etc/passwd", "//web/index.html"}) {
+        INFO(p);
+        CHECK_FALSE(resolve_remote_path(p));
+    }
+}
+
+TEST_CASE("SMA-08: podaci pregleda iz mreže samo uz ključ u zaglavlju, bez tehničkih postavki") {
+    const std::string key = "KLJUCKLJUCKLJUCKLJUCKLJUC2";
+    HttpServer view(remote_view_handler(
+        [] { return json{{"settings", {{"modbus_host", "192.168.5.199"}, {"meter_unit_id", 3}, {"plant_name", "E"}}},
+                         {"images", {{"logo", "https://evil/x"}}}}; },
+        [&] { return key; }));
+    const int port = start_on_free_port(view, 18920);
+    REQUIRE(port);
+    const std::string base = "GET /api/dashboard HTTP/1.1\r\nHost: x\r\n";
+    CHECK(status_of(raw_request(port, base + "\r\n")) == 401);
+    CHECK(status_of(raw_request(port, "GET /api/dashboard?k=" + key + " HTTP/1.1\r\nHost: x\r\n\r\n")) == 401);  // ne u URL-u
+    const std::string ok = raw_request(port, base + "X-Solari-View-Key: " + key + "\r\n\r\n");
+    CHECK(status_of(ok) == 200);
+    CHECK(ok.find("192.168.5.199") == std::string::npos);
+    CHECK(ok.find("\"meter_unit_id\":1") != std::string::npos);
+    CHECK(status_of(raw_request(port, "GET /api/image/logo HTTP/1.1\r\nHost: x\r\nX-Solari-View-Key: " + key + "\r\n\r\n")) == 404);
+    CHECK(status_of(raw_request(port, "GET /api/v1/ping HTTP/1.1\r\nHost: x\r\n\r\n")) == 404);  // API nije na ovom portu
+    CHECK(status_of(raw_request(port, "POST /api/dashboard HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")) == 405);
+    for (int i = 0; i < 9; ++i) raw_request(port, base + "X-Solari-View-Key: KRIVO\r\n\r\n");
+    CHECK(status_of(raw_request(port, base + "X-Solari-View-Key: " + key + "\r\n\r\n")) == 429);  // 10 pogrešnih → blokada
+}
+
+TEST_CASE("SMA-16: zaglavlja bez kraja, previše zaglavlja i dvostruki Content-Length se odbijaju") {
+    HttpServer s([](const HttpRequest&) { return HttpResponse::text(200, "ok"); });
+    const int port = start_on_free_port(s, 18980);
+    REQUIRE(port);
+    CHECK(status_of(raw_request(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")) == 200);
+    {
+        // Napomena o okruženju: na ovom računalu filtar na loopbacku zadržava NEDOVRŠENE zahtjeve koji počinju s "GET "
+        // (provjereno i s običnim Python poslužiteljem), pa se šalje "XGET" – 431 se provjerava prije metode.
+        const auto t431 = std::chrono::steady_clock::now();
+        const std::string r431 = raw_request(port, "XGET / HTTP/1.1\r\nX: " + std::string(9000, 'a'));
+        const auto ms431 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t431).count();
+        INFO("odgovor: [" << r431.substr(0, 60) << "] duljina " << r431.size() << " ms " << ms431 << " wsa " << WSAGetLastError());
+        CHECK(status_of(r431) == 431);
+    }
+    std::string many = "GET / HTTP/1.1\r\n";
+    for (int i = 0; i < 120; ++i) many += "X-" + std::to_string(i) + ": 1\r\n";
+    CHECK(status_of(raw_request(port, many + "\r\n")) == 431);
+    CHECK(status_of(raw_request(port, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 2\r\nContent-Length: 0\r\n\r\nab")) == 400);
+    CHECK(status_of(raw_request(port, "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n")) == 411);
+}
+
+TEST_CASE("SMA-07: spori klijenti ne blokiraju poslužitelj; najviše 4 veze po adresi") {
+    HttpServer s([](const HttpRequest&) { return HttpResponse::text(200, "ok"); });
+    const int port = start_on_free_port(s, 19040);
+    REQUIRE(port);
+    // 3 spora klijenta (otvorena veza bez zahtjeva) – u 3.3 jedina nit bi čekala na prvog
+    std::vector<SOCKET> slow;
+    for (int i = 0; i < 3; ++i) slow.push_back(connect_local(port));
+    Sleep(300);
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK(status_of(raw_request(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")) == 200);
+    CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::seconds(2));
+    // četvrta spora veza: s iste adrese više nema mjesta – peta se odmah zatvara bez obrade
+    slow.push_back(connect_local(port));
+    Sleep(300);
+    CHECK(raw_request(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n").empty());
+    for (SOCKET x : slow) closesocket(x);
+    Sleep(500);
+    CHECK(status_of(raw_request(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")) == 200);  // nakon zatvaranja ponovno radi
+}
+

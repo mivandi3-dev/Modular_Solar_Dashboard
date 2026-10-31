@@ -317,6 +317,7 @@ json get_state(App& app) {
         {"device_profiles", vendor_profiles_json()},
         {"images", {{"hero", image_info("hero")}, {"drawing", image_info("drawing")}, {"logo", image_info("logo")}}},
         {"remote_urls", remote_urls(s)},
+        {"remote_view_key", s.remote_view ? app.remote_view_key() : std::string()},
         {"role", app.server_role() ? "server" : "client"},
         {"features", {{"cloud", true}}},
         {"server", app.server_role() ? server_state(app) : json(nullptr)},
@@ -745,6 +746,10 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
                 return fail(e.what());
             }
         });
+    }
+    if (method == "remote_view_new_key") {
+        const std::string key = app.new_remote_view_key();
+        return reply(ok(tr("Novi pristupni ključ je izrađen – stari više ne vrijedi."), {{"remote_view_key", key}}));
     }
     if (method == "open_folder") {
         const std::string what = arg_string(args, 0);

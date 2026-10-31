@@ -74,6 +74,7 @@ struct Settings {
     // pregled dashboarda iz lokalne mreže (preglednik na drugom računalu ili mobitelu)
     bool remote_view = false;
     int remote_port = 8600;
+    std::string remote_view_key_enc;  // 4.0 (SMA-08): pristupni ključ pregleda iz mreže (DPAPI)
     // obavijesti e-poštom (šalje ih poller): adrese odvojene zarezom
     std::string alert_emails;
     std::string smtp_host;

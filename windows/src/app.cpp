@@ -5,6 +5,8 @@
 #include <thread>
 
 #include "api.hpp"
+#include "crypto.hpp"
+#include "secret.hpp"
 #include "tls.hpp"
 #include "display.hpp"
 #include "system.hpp"
@@ -146,7 +148,9 @@ void App::update_remote() {
     if (want == remote_port()) return;
     remote_.reset();
     if (!want) return;
-    auto server = std::make_unique<HttpServer>(remote_view_handler([this] { return dashboard_json(*this); }));
+    if (s.remote_view_key_enc.empty()) new_remote_view_key();  // 4.0: pregled iz mreže samo uz pristupni ključ
+    auto server = std::make_unique<HttpServer>(remote_view_handler([this] { return dashboard_json(*this); },
+                                                                   [this] { return unprotect_secret(settings().remote_view_key_enc); }));
     if (server->start(want, true)) remote_ = std::move(server);
 }
 
@@ -368,6 +372,18 @@ json App::unlock(const std::string& pin) {
     }
     return {{"ok", false}, {"message", tr("Pogrešan PIN.")}};
 }
+
+std::string App::new_remote_view_key() {
+    // 128 bita slučajno (base32, 26 znakova); stari ključ odmah prestaje vrijediti
+    Bytes raw = random_bytes(16);
+    std::string key = base32(raw);
+    wipe(raw);
+    update_settings([&](Settings& s) { s.remote_view_key_enc = protect_secret(key); });
+    log_info("Pregled iz mreže: izrađen novi pristupni ključ");
+    return key;
+}
+
+std::string App::remote_view_key() const { return unprotect_secret(settings().remote_view_key_enc); }
 
 void App::update_settings(const std::function<void(Settings&)>& change) {
     std::lock_guard lock(mutex_);
