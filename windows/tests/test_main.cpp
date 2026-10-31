@@ -325,7 +325,7 @@ TEST_CASE("adrese e-pošte i obrazac obavijesti") {
 
 TEST_CASE("DPAPI: lozinka se ne sprema u čistom tekstu") {
     const std::string stored = protect_secret("tajna-lozinka");
-    CHECK(stored.rfind("dpapi:", 0) == 0);
+    CHECK(stored.rfind("dpapi2:", 0) == 0);
     CHECK(stored.find("tajna") == std::string::npos);
     CHECK(unprotect_secret(stored) == "tajna-lozinka");
     CHECK(unprotect_secret("dpapi:AAAA").empty());
@@ -1553,7 +1553,7 @@ TEST_CASE("korisnici: ključevi u datoteci su zaštićeni DPAPI-jem i ponovno se
     CHECK(a.aes == b.aes);
     CHECK(a.hmac == b.hmac);
     const std::string file = *read_file(dir.path / "users.key");
-    CHECK(file.rfind("dpapi:", 0) == 0);
+    CHECK(file.rfind("dpapi2:", 0) == 0);
     write_file_atomic(dir.path / "bad.key", "dpapi:AAAA\r\n");
     CHECK_THROWS(load_or_create_user_keys(dir.path / "bad.key"));  // ne smije tiho stvoriti nove ključeve
 }

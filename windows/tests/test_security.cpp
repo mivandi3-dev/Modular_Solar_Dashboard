@@ -268,3 +268,47 @@ TEST_CASE("SMA-07: spori klijenti ne blokiraju poslužitelj; najviše 4 veze po 
     CHECK(status_of(raw_request(port, "GET / HTTP/1.1\r\nHost: x\r\n\r\n")) == 200);  // nakon zatvaranja ponovno radi
 }
 
+
+// ---------------------------------------------------------------- SMA-09 (DPAPI s entropijom aplikacije)
+#include <wincrypt.h>
+
+#include "secret.hpp"
+
+TEST_CASE("SMA-09: tajna se ne dešifrira bez entropije aplikacije; stari zapis bez entropije se ne čita") {
+    const std::string stored = protect_secret("oznaka-prijave");
+    CHECK(stored.rfind("dpapi2:", 0) == 0);
+    CHECK(unprotect_secret(stored) == "oznaka-prijave");
+    // isti tekst zaštićen DPAPI-jem računala BEZ entropije (kako bi to napravio drugi program ili 3.3)
+    const std::string text = "oznaka-prijave";
+    DATA_BLOB in{static_cast<DWORD>(text.size()), reinterpret_cast<BYTE*>(const_cast<char*>(text.data()))};
+    DATA_BLOB out{};
+    REQUIRE(CryptProtectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, &out));
+    const std::string b64 = base64(std::vector<uint8_t>(out.pbData, out.pbData + out.cbData));
+    LocalFree(out.pbData);
+    CHECK(unprotect_secret("dpapi2:" + b64).empty());  // bez entropije aplikacije nema dešifriranja
+    CHECK(unprotect_secret("dpapi:" + b64).empty());   // format 3.3 se ne čita
+    // obrnuto: zapis 4.0 drugi program bez entropije ne može otvoriti
+    const auto raw = stored.substr(7);
+    DWORD size = 0;
+    CryptStringToBinaryA(raw.c_str(), static_cast<DWORD>(raw.size()), CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr);
+    std::vector<BYTE> bytes(size);
+    CryptStringToBinaryA(raw.c_str(), static_cast<DWORD>(raw.size()), CRYPT_STRING_BASE64, bytes.data(), &size, nullptr, nullptr);
+    DATA_BLOB sealed{size, bytes.data()};
+    DATA_BLOB plain{};
+    CHECK_FALSE(CryptUnprotectData(&sealed, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &plain));
+}
+
+// ---------------------------------------------------------------- SMA-15 (ključ ograničenja po adresi)
+#include "api.hpp"
+
+TEST_CASE("SMA-15: IPv6 se grupira po /64, neispravan zapis ne zaobilazi brojanje") {
+    CHECK(rate_limit_key("203.0.113.7") == "203.0.113.7");
+    CHECK(rate_limit_key("2001:db8:1:2:aaaa::1") == rate_limit_key("2001:db8:1:2:bbbb:cccc:dddd:eeee"));
+    CHECK(rate_limit_key("2001:db8:1:2::1") == "v6:2001:db8:1:2::/64");
+    CHECK(rate_limit_key("2001:DB8:1:2::1") == "v6:2001:db8:1:2::/64");
+    CHECK(rate_limit_key("2001:db8:1:3::1") != rate_limit_key("2001:db8:1:2::1"));
+    CHECK(rate_limit_key("::1") == "v6:0:0:0:0::/64");
+    CHECK(rate_limit_key("x' or 1=1") == "invalid");
+    CHECK(rate_limit_key("1.2.3.4, 5.6.7.8") == "invalid");
+    CHECK(rate_limit_key("") == "invalid");
+}

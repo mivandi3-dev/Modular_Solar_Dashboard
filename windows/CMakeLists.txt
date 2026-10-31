@@ -27,6 +27,12 @@ target_link_libraries(solari_core PUBLIC sqlite3 ws2_32 iphlpapi bcrypt ncrypt s
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(solari_core PUBLIC -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
                                               -Wno-unknown-pragmas)
+    # 4.0 (SMA-22): zaštita stoga i Control Flow Guard (uz ASLR/DEP koje llvm-mingw već uključuje)
+    target_compile_options(solari_core PUBLIC -fstack-protector-strong)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(solari_core PUBLIC -mguard=cf)
+        target_link_options(solari_core PUBLIC -mguard=cf -Wl,--guard-cf)
+    endif()
 endif()
 
 # ---------------------------------------------------------------- aplikacija

@@ -3,9 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- usesCleartextTraffic: poslužitelj u lokalnoj mreži (http://192.168.x.x:8700); Cloudflare tunel je https -->
+    <!-- Promet: samo HTTPS (poslužitelj u lokalnoj mreži s uparenim otiskom certifikata, Cloudflare tunel preko CA);
+         obični HTTP samo za 127.0.0.1/localhost (network_security_config.xml). Bez sigurnosne kopije i prijenosa
+         podataka na drugi uređaj (allowBackup, dataExtractionRules – oznaka prijave je vezana uz Android Keystore). -->
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
