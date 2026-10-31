@@ -1,6 +1,6 @@
 #include <winver.h>
 
-1 ICON "app.ico"
+1 ICON "server.ico"
 #ifdef SOLARI_DEV_NO_UAC
 1 24 "app.manifest"  // samo razvojna izgradnja (build-dev) za automatske testove – nikad u Setupu
 #else

@@ -67,7 +67,11 @@ OutputBaseFilename=SolarniMonitor2-Setup-TEST
 #else
 OutputBaseFilename={#SetupName}-{#AppVersion}
 #endif
+#ifdef Server
+SetupIconFile=..\res\server.ico
+#else
 SetupIconFile=..\res\app.ico
+#endif
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 Compression=lzma2/max
