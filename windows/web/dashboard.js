@@ -108,7 +108,7 @@
   }
 
   function renderFlow(w, p, out) {
-    const f = out.flow, url = data.images.drawing;
+    const f = out.flow, url = UI.safeImageUrl(data.images.drawing);
     if (!drawings.has(url)) {
       drawings.set(url, null);
       Cutout.get(url).then((uri) => { drawings.set(url, uri); render(); });

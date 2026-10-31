@@ -30,6 +30,16 @@ bool external_browser_url(const std::wstring& url) {
     return starts_with(u, L"https://") && !trusted_app_url(url) && u.find_first_of(L" \"\r\n\t") == std::wstring::npos;
 }
 
+bool allowed_app_resource(const std::wstring& url) {
+    const std::wstring u = lower(url);
+    if (!starts_with(u, L"https://app.solari/")) return true;  // ostali hostovi nisu predmet ovog filtra
+    if (u.find(L"..") != std::wstring::npos || u.find(L"%2e") != std::wstring::npos || u.find(L"%5c") != std::wstring::npos ||
+        u.find(L'\\') != std::wstring::npos) {
+        return false;
+    }
+    return starts_with(u, L"https://app.solari/web/") || starts_with(u, L"https://app.solari/assets/");
+}
+
 bool settings_only_method(const std::string& method) {
     static const std::set<std::string> kSettingsOnly = {
         "get_state",       "unlock",           "admin_login",     "setup_admin",       "admin_logout",
@@ -39,6 +49,14 @@ bool settings_only_method(const std::string& method) {
         "get_report",      "save_report_csv",  "import_history",  "import_smartlogger", "choose_image",
         "reset_image",     "open_folder",      "close"};
     return kSettingsOnly.count(method) > 0;
+}
+
+bool main_window_method(const std::string& method) {
+    static const std::set<std::string> kMain = {
+        "get_dashboard", "get_editor",  "save_layout",  "remove_page", "set_rotation",      "reset_layout",
+        "set_display",   "set_sidebar", "toggle_fullscreen", "exit_fullscreen", "open_settings", "reload",
+        "quit",          "open_logs",   "window_control", "window_state", "get_i18n"};
+    return kMain.count(method) > 0;
 }
 
 }  // namespace sm

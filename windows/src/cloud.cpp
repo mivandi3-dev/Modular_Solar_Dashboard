@@ -148,6 +148,9 @@ HttpResult http_call(const std::string& base_url, const HttpCall& call) {
     Handle req(WinHttpOpenRequest(conn.h, widen(call.method).c_str(), target.c_str(), nullptr, WINHTTP_NO_REFERER,
                                   WINHTTP_DEFAULT_ACCEPT_TYPES, https ? WINHTTP_FLAG_SECURE : 0));
     if (!req) fail_connect(base_url, GetLastError());
+    // SMA-10: preusmjeravanja se nikad ne slijede (zaglavlje Authorization ne smije otići drugom poslužitelju)
+    DWORD redirects = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+    WinHttpSetOption(req.h, WINHTTP_OPTION_REDIRECT_POLICY, &redirects, sizeof redirects);
     PinCheck pin{call.pin, {}, false};
     if (https && pinned) {
         // vlastiti certifikat poslužitelja: izdavač i ime se ne provjeravaju, nego otisak (prije slanja zahtjeva)
@@ -187,6 +190,9 @@ HttpResult http_call(const std::string& base_url, const HttpCall& call) {
         if (out.body.size() > kMaxBodyBytes) throw CloudError(tr("Poslužitelj je vratio grešku {code}.", {{"code", "413"}}));
     }
     if (out.status == 429) throw CloudError(tr("Previše pogrešnih pokušaja – pokušajte ponovno za nekoliko minuta."));
+    if (out.status >= 300 && out.status < 400) {
+        throw CloudError(tr("Poslužitelj preusmjerava na drugu adresu – provjerite adresu poslužitelja (preusmjeravanja se ne slijede)."));
+    }
     return out;
 }
 

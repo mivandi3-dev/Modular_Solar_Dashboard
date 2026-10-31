@@ -5,6 +5,9 @@
 #include <windowsx.h>
 
 #include <atomic>
+#include <shellapi.h>
+
+#include "webguard.hpp"
 
 namespace sm {
 
@@ -52,6 +55,18 @@ using ControllerDone = Handler<ICoreWebView2CreateCoreWebView2ControllerComplete
                                ICoreWebView2Controller*>;
 using MessageReceived = Handler<ICoreWebView2WebMessageReceivedEventHandler, &IID_ICoreWebView2WebMessageReceivedEventHandler,
                                 ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>;
+// 4.0 (SMA-06): navigacija, novi prozori i zahtjevi prema app.solari
+using NavigationStarting = Handler<ICoreWebView2NavigationStartingEventHandler, &IID_ICoreWebView2NavigationStartingEventHandler,
+                                   ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>;
+using NewWindowRequested = Handler<ICoreWebView2NewWindowRequestedEventHandler, &IID_ICoreWebView2NewWindowRequestedEventHandler,
+                                   ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs*>;
+using ResourceRequested = Handler<ICoreWebView2WebResourceRequestedEventHandler, &IID_ICoreWebView2WebResourceRequestedEventHandler,
+                                  ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs*>;
+
+// https: poveznica izvan aplikacije otvara se u pregledniku sustava (nikad u prozoru s nativnim mostom)
+void open_in_browser(const std::wstring& url) {
+    if (external_browser_url(url)) ShellExecuteW(nullptr, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
 
 template <typename T>
 struct ComPtr {  // minimalni pametni pokazivač za QueryInterface
@@ -173,7 +188,60 @@ void WebViewWindow::create_controller() {
                                                         COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
         }
         EventRegistrationToken token{};
+        // SMA-06: u prozoru smiju biti samo stranice aplikacije; sve ostalo se otkazuje (https: → preglednik sustava)
+        auto* on_navigate = new NavigationStarting([](ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs* args) {
+            LPWSTR uri = nullptr;
+            if (SUCCEEDED(args->get_Uri(&uri)) && uri) {
+                const std::wstring u = uri;
+                CoTaskMemFree(uri);
+                if (!allowed_navigation(u)) {
+                    args->put_Cancel(TRUE);
+                    open_in_browser(u);
+                }
+            } else {
+                args->put_Cancel(TRUE);
+            }
+            return S_OK;
+        });
+        webview_->add_NavigationStarting(on_navigate, &token);
+        on_navigate->Release();
+        auto* on_new_window = new NewWindowRequested([](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* args) {
+            args->put_Handled(TRUE);  // nikad novi WebView prozor
+            LPWSTR uri = nullptr;
+            if (SUCCEEDED(args->get_Uri(&uri)) && uri) {
+                open_in_browser(uri);
+                CoTaskMemFree(uri);
+            }
+            return S_OK;
+        });
+        webview_->add_NewWindowRequested(on_new_window, &token);
+        on_new_window->Release();
+        // app.solari mapira mapu programa: dopušteni su samo /web/ i /assets/ (ne .exe, .dll, curl …)
+        webview_->AddWebResourceRequestedFilter(L"https://app.solari/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+        auto* on_resource = new ResourceRequested([](ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* args) {
+            ComPtr<ICoreWebView2WebResourceRequest> request;
+            LPWSTR uri = nullptr;
+            if (SUCCEEDED(args->get_Request(request.put())) && request && SUCCEEDED(request->get_Uri(&uri)) && uri) {
+                const std::wstring u = uri;
+                CoTaskMemFree(uri);
+                if (!allowed_app_resource(u) && g_env) {
+                    ComPtr<ICoreWebView2WebResourceResponse> denied;
+                    if (SUCCEEDED(g_env->CreateWebResourceResponse(nullptr, 403, L"Forbidden", L"", denied.put()))) {
+                        args->put_Response(denied.p);
+                    }
+                }
+            }
+            return S_OK;
+        });
+        webview_->add_WebResourceRequested(on_resource, &token);
+        on_resource->Release();
         auto* on_message = new MessageReceived([this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) {
+            // SMA-06: poruke nativnom mostu prihvaćaju se samo sa stranica aplikacije
+            LPWSTR source = nullptr;
+            if (FAILED(args->get_Source(&source)) || !source) return S_OK;
+            const bool trusted = trusted_app_url(source);
+            CoTaskMemFree(source);
+            if (!trusted) return S_OK;
             LPWSTR text = nullptr;
             if (SUCCEEDED(args->TryGetWebMessageAsString(&text)) && text) {
                 const std::string message = narrow(text);

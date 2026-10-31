@@ -6,6 +6,12 @@ const UI = (() => {
   let themeName = "dark";
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // SMA-18: adresa slike s poslužitelja smije biti samo slika aplikacije – inače se ne prikazuje (nema ubacivanja atributa/CSS-a)
+  const IMAGE_PREFIXES = ["https://app.solari/", "https://data.solari/", "/api/v1/images/", "/api/image/", "blob:", "data:image/"];
+  const safeImageUrl = (u) => {
+    if (typeof u !== "string" || !IMAGE_PREFIXES.some((p) => u.startsWith(p))) return "";
+    return /["'()<>\\\s]/.test(u) ? "" : u;  // navodnici, zagrade, <>, \ i razmaci nisu dopušteni
+  };
   const weekdayIndex = (d) => (d.getDay() + 6) % 7; // ponedjeljak = 0
 
   // ---------------------------------------------------------------- formatiranje prema jeziku (i18n.js)
@@ -99,6 +105,7 @@ const UI = (() => {
 
   // ---------------------------------------------------------------- sekcije
   function heroBackground(photoUrl) {
+    photoUrl = safeImageUrl(photoUrl);
     const fade = pal.FADE;
     const layers = [`linear-gradient(90deg, rgba(${fade},.97) 0%, rgba(${fade},.86) 24%, rgba(${fade},0) 52%)`,
       `linear-gradient(180deg, rgba(${fade},0) 70%, rgba(${fade},.55) 100%)`];
@@ -113,7 +120,8 @@ const UI = (() => {
   }
 
   function siteCard(logoUrl, name, location, state, stateCls) {
-    return `<div class="glass site-card"><div class="name">${esc(location)}</div><img class="logo" src="${logoUrl}" alt="${esc(name)}">`
+    const logo = safeImageUrl(logoUrl);
+    return `<div class="glass site-card"><div class="name">${esc(location)}</div>${logo ? `<img class="logo" src="${esc(logo)}" alt="${esc(name)}">` : ""}`
       + `<div class="facts"><div class="fact ${stateCls}"><div class="k">${T("Status")}</div><div class="v">${esc(state)}</div></div></div></div>`;
   }
 
@@ -194,7 +202,7 @@ const UI = (() => {
   }
 
   return {
-    SOLAR_PANEL_ICON, esc, fmt, energy, mass, dateHr, statusDot, delta,
+    SOLAR_PANEL_ICON, esc, safeImageUrl, fmt, energy, mass, dateHr, statusDot, delta,
     hhmm, tint, rgba, setTheme, theme: () => pal, themeName: () => themeName, weekdayIndex, sparkline, speedometer, tile,
     heroBackground, heroContent, siteCard, weatherCard, kpiStrip, cardHeader, empty, listCard, speedometerCard, flowLayers,
   };
