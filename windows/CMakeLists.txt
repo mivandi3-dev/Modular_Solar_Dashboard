@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(SolarniMonitor2 VERSION 3.3.0 LANGUAGES C CXX RC)
+project(SolarniMonitor2 VERSION 4.0.0 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

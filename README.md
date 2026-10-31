@@ -47,11 +47,13 @@ Since 3.0 there is no API key: the apps sign in with the **email and password** 
 - **Passwords** are never stored: the server keeps only a PBKDF2-HMAC-SHA256 hash (600,000 iterations, random salt).
   First name, last name and email are stored encrypted with AES-256-GCM; the keys are protected by Windows DPAPI.
 - **Sign-in:** the apps store only a random sign-in token (encrypted with DPAPI on Windows and the Android Keystore on
-  Android) – never the password. A token is valid for 30 days after its last use (at most 180 days). A new password,
+  Android) – never the password. A token is valid for 30 days after its last use (at most 90 days, 4.0). A new password,
   blocking or deleting a user signs them out of all devices immediately.
 - 5 wrong passwords lock the account for 15 minutes; 10 failed attempts from one address block it for 10 minutes (`429`).
-- **Initial password (3.3):** a user added without a password gets `12345678` and must set their own password at the first
-  sign-in; the initial password is valid for 7 days and the administrator can reset it.
+- **Activation code (4.0):** a user added without a password gets a one-time random activation code (12 characters, valid
+  for 72 hours, shown to the administrator once) and sets their own password with it. There is no shared initial password.
+- **Pairing (4.0):** the first sign-in to a server on the local network requires the 12-character pairing code shown in the
+  server window (derived from the certificate's SHA-256 fingerprint) – no trust on first use.
 - **Two-factor sign-in (3.1):** the administrator enables it per account (administrators and users). At the next sign-in
   the user scans a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy…; TOTP,
   RFC 6238) and receives 8 one-time recovery codes. The secret is stored encrypted (AES-256-GCM), a code cannot be
@@ -132,11 +134,13 @@ Od 3.0 nema API ključa: aplikacije se prijavljuju **e-poštom i lozinkom** kori
 - **Lozinke** se nikad ne spremaju: poslužitelj čuva samo sažetak PBKDF2-HMAC-SHA256 (600 000 ponavljanja, slučajna
   sol). Ime, prezime i e-pošta spremaju se šifrirani AES-256-GCM-om; ključeve štiti Windows DPAPI.
 - **Prijava:** aplikacije čuvaju samo slučajnu oznaku prijave (na Windowsu šifriranu DPAPI-jem, na Androidu ključem iz
-  Android Keystorea) – nikad lozinku. Oznaka vrijedi 30 dana od zadnjeg korištenja (najdulje 180 dana). Nova lozinka,
+  Android Keystorea) – nikad lozinku. Oznaka vrijedi 30 dana od zadnjeg korištenja (najdulje 90 dana, 4.0). Nova lozinka,
   blokiranje ili brisanje korisnika odmah ga odjavljuju sa svih uređaja.
 - 5 pogrešnih lozinki zaključava račun na 15 minuta; 10 neuspjelih pokušaja s iste adrese blokira je na 10 minuta (`429`).
-- **Početna lozinka (3.3):** korisnik dodan bez lozinke dobiva `12345678` i pri prvoj prijavi mora upisati svoju lozinku;
-  početna lozinka vrijedi 7 dana, a administrator je može ponovno postaviti.
+- **Aktivacijski kod (4.0):** korisnik dodan bez lozinke dobiva jednokratni slučajni kod (12 znakova, vrijedi 72 sata,
+  administratoru se prikazuje jednom) i njime postavlja svoju lozinku. Zajednička početna lozinka ne postoji.
+- **Uparivanje (4.0):** prva prijava na poslužitelj u lokalnoj mreži traži kod za uparivanje od 12 znakova s prozora
+  poslužitelja (izveden iz SHA-256 otiska certifikata) – bez povjerenja pri prvom kontaktu.
 - **Dvofaktorska prijava (3.1):** administrator je uključuje po računu (administratori i korisnici). Pri sljedećoj prijavi
   korisnik skenira QR kod aplikacijom autentifikatorom (Google Authenticator, Microsoft Authenticator, Authy…; TOTP,
   RFC 6238) i dobije 8 jednokratnih kodova za oporavak. Tajna je šifrirana (AES-256-GCM), isti kod ne vrijedi dvaput,

@@ -234,7 +234,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 #device-card:not([data-serial="1"]) .serial-field { display: none; }
 #device-card[data-serial="1"] .net-field { display: none; }
 
-/* ---- početna lozinka (3.3) ---- */
+/* ---- aktivacija računa (4.0) ---- */
 .newpw { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--amber); border-radius: 12px; background: rgba(245,158,11,.08); }
 .newpw[hidden] { display: none; }
 .newpw p { margin: 0 0 6px; }
