@@ -1005,6 +1005,7 @@
   "Kod za uparivanje": "Código de emparejamiento",
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "de la ventana del servidor solar (Ajustes → Servidor); solo en el primer inicio de sesión en un servidor de la red local",
   "Aktivacija računa:": "Activación de la cuenta:",
-  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "ha iniciado sesión con un código de activación de un solo uso. Introduzca su propia contraseña nueva – al menos 10 caracteres y al menos tres tipos de caracteres (minúsculas, mayúsculas, dígitos, otros caracteres) o al menos 16 caracteres."
+  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "ha iniciado sesión con un código de activación de un solo uso. Introduzca su propia contraseña nueva – al menos 10 caracteres y al menos tres tipos de caracteres (minúsculas, mayúsculas, dígitos, otros caracteres) o al menos 16 caracteres.",
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "de la ventana del servidor solar (Ajustes → Servidor) – solo en el primer inicio de sesión en un servidor de la red local"
  }
 }

@@ -1005,6 +1005,7 @@
   "Kod za uparivanje": "Eşleştirme kodu",
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "Güneş sunucusu penceresinden (Ayarlar → Sunucu); yalnızca yerel ağdaki bir sunucuya ilk girişte",
   "Aktivacija računa:": "Hesap etkinleştirme:",
-  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "tek kullanımlık bir etkinleştirme koduyla giriş yaptınız. Kendi yeni parolanızı girin – en az 10 karakter ve en az üç karakter türü (küçük ve büyük harf, rakam, diğer karakterler) ya da en az 16 karakter."
+  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "tek kullanımlık bir etkinleştirme koduyla giriş yaptınız. Kendi yeni parolanızı girin – en az 10 karakter ve en az üç karakter türü (küçük ve büyük harf, rakam, diğer karakterler) ya da en az 16 karakter.",
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "Güneş sunucusu penceresinden (Ayarlar → Sunucu) – yalnızca yerel ağdaki bir sunucuya ilk girişte"
  }
 }

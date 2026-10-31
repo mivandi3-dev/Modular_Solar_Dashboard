@@ -1005,6 +1005,7 @@
   "Kod za uparivanje": "配对码",
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "来自太阳能服务器窗口（设置 → 服务器）；仅在首次登录局域网中的服务器时需要",
   "Aktivacija računa:": "账户激活：",
-  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "您使用一次性激活码登录。请输入您自己的新密码——至少 10 个字符且至少包含三类字符（小写字母、大写字母、数字、其他字符），或至少 16 个字符。"
+  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "您使用一次性激活码登录。请输入您自己的新密码——至少 10 个字符且至少包含三类字符（小写字母、大写字母、数字、其他字符），或至少 16 个字符。",
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "来自太阳能服务器窗口（设置 → 服务器）；仅在首次登录局域网中的服务器时需要"
  }
 }

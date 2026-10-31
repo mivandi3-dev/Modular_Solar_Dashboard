@@ -1005,6 +1005,7 @@
   "Kod za uparivanje": "Kopplungscode",
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "aus dem Fenster des Solar-Servers (Einstellungen → Server); nur bei der ersten Anmeldung an einem Server im lokalen Netz",
   "Aktivacija računa:": "Kontoaktivierung:",
-  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "Sie haben sich mit einem einmaligen Aktivierungscode angemeldet. Geben Sie Ihr eigenes neues Passwort ein – mindestens 10 Zeichen und mindestens drei Zeichenarten (Klein- und Großbuchstaben, Ziffern, andere Zeichen) oder mindestens 16 Zeichen."
+  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "Sie haben sich mit einem einmaligen Aktivierungscode angemeldet. Geben Sie Ihr eigenes neues Passwort ein – mindestens 10 Zeichen und mindestens drei Zeichenarten (Klein- und Großbuchstaben, Ziffern, andere Zeichen) oder mindestens 16 Zeichen.",
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "aus dem Fenster des Solar-Servers (Einstellungen → Server) – nur bei der ersten Anmeldung an einem Server im lokalen Netz"
  }
 }

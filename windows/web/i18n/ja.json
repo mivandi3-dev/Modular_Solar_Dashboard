@@ -1005,6 +1005,7 @@
   "Kod za uparivanje": "ペアリングコード",
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "ソーラーサーバーのウィンドウ（設定 → サーバー）から。ローカルネットワーク上のサーバーへの初回サインイン時のみ",
   "Aktivacija računa:": "アカウントの有効化:",
-  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "1 回限りのアクティベーションコードでサインインしました。新しいパスワードを入力してください – 10 文字以上で 3 種類以上の文字（小文字、大文字、数字、その他の文字）を含めるか、16 文字以上にしてください。"
+  "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "1 回限りのアクティベーションコードでサインインしました。新しいパスワードを入力してください – 10 文字以上で 3 種類以上の文字（小文字、大文字、数字、その他の文字）を含めるか、16 文字以上にしてください。",
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "ソーラーサーバーのウィンドウ（設定 → サーバー）から。ローカルネットワーク上のサーバーへの初回サインイン時のみ"
  }
 }
