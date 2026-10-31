@@ -23,7 +23,7 @@
   #define FirewallRule "Solarni posluzitelj - API"
   #define SetupName "SolarniServer-Setup"
 #else
-  #define AppName "Solarni monitor 2"
+  #define AppName "Solarni monitor"
   #define AppExe "SolarniMonitor.exe"
   #define AppUserModelID "MarkoIvandic.SolarniMonitor2"
   #ifdef TestInstall

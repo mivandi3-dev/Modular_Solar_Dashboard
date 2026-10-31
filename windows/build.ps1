@@ -1,12 +1,13 @@
 ﻿# Gradi Solarni monitor 2 (C++) i njegovu instalaciju: build\output\SolarniMonitor2-Setup-<verzija>.exe
 #
-#   powershell -ExecutionPolicy Bypass -File verzija2\build.ps1
+#   powershell -ExecutionPolicy Bypass -File windows\build.ps1 [-Build <mapa>]
 #
 # Preduvjeti (samo na računalu na kojem se gradi):
 #   winget install MartinStorsjo.LLVM-MinGW.UCRT Kitware.CMake Ninja-build.Ninja JRSoftware.InnoSetup
+param([string]$Build = "")  # 4.0: mapa gradnje (zadano: build u mapi windows); npr. -Build <izlazna mapa>
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
-$Build = Join-Path $Root "build"
+if (-not $Build) { $Build = Join-Path $Root "build" }
 $Redist = Join-Path $Build "redist"
 
 function Step($text) { Write-Host "==> $text" -ForegroundColor Green }
@@ -46,6 +47,12 @@ if (-not (Test-Path $WebView)) {
     Step "Preuzimanje WebView2 bootstrappera"
     New-Item -ItemType Directory -Force $Redist | Out-Null
     Invoke-WebRequest "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $WebView -UseBasicParsing
+}
+# 4.0 (SMA-12): bootstrapper se mijenja (evergreen) pa se umjesto sažetka provjerava Microsoftov Authenticode potpis
+$sig = Get-AuthenticodeSignature $WebView
+if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch "O=Microsoft Corporation") {
+    Remove-Item $WebView -Force
+    throw "WebView2 bootstrapper nema valjan Microsoftov potpis – gradnja zaustavljena"
 }
 
 Step "Inno Setup"
