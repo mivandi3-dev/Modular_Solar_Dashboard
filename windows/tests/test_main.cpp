@@ -2019,3 +2019,258 @@ TEST_CASE("SMA-03: jednokratni aktivacijski kod umjesto zajedničke početne loz
     CHECK_FALSE(st.session_user(rb.token, 6003));
     CHECK_FALSE(st.session_user(tok2, 6003));
 }
+
+// ================================================================ Device Integration Regression Suite (4.0, SMA-25)
+// Razina S = simulirani uređaj (cijeli put read_plant → Modbus TCP → simulator). NIJE dokaz rada sa stvarnim uređajem.
+// Očekivane vrijednosti su ručno izračunate iz tablica registara (ne iz koda) – vidi DEVICE_INTEGRATION_TEST_PLAN.md.
+namespace {
+// Popuni raspon nulama (uređaj odgovara i za registre koje profil ne koristi – kao stvarni uređaj u bloku)
+void fill(FakeRegisters& f, uint16_t from, uint16_t to) {
+    for (uint32_t a = from; a <= to; ++a) if (!f.regs.count(static_cast<uint16_t>(a))) f.regs[static_cast<uint16_t>(a)] = 0;
+}
+void put32(FakeRegisters& f, uint16_t hi_addr, uint16_t lo_addr, uint32_t v) {
+    f.regs[hi_addr] = static_cast<uint16_t>(v >> 16);
+    f.regs[lo_addr] = static_cast<uint16_t>(v & 0xFFFF);
+}
+Settings device_settings(const char* type, int port) {
+    Settings s;
+    s.device_type = type;
+    s.modbus_host = "127.0.0.1";
+    s.modbus_port = port;
+    s.logger_interface = "";
+    return s;
+}
+}  // namespace
+
+TEST_CASE("[device][huawei][S] HW-01/02/03: SmartLogger – snaga, energije, cos φ, stanje, mjerač, unit ID") {
+    NetInit net;
+    FakeRegisters logger;
+    fill(logger, 40500, 40600);
+    put32(logger, 40525, 40526, static_cast<uint32_t>(100000));   // 100,000 kW (I32 / 1000)
+    put32(logger, 40562, 40563, 1234);                             // 123,4 kWh danas (U32 / 10)
+    put32(logger, 40560, 40561, 987654);                           // 98.765,4 kWh ukupno (U32 / 10)
+    logger.regs[40532] = 987;                                      // cos φ 0,987 (I16 / 1000)
+    logger.regs[40543] = 0x0200;                                   // stanje
+    FakeRegisters meter;
+    fill(meter, 32260, 32300);
+    put32(meter, 32278, 32279, static_cast<uint32_t>(-1500));      // −1,5 kW (I32 / 1000)
+    LocalServer srv([&](SOCKET c) { serve_modbus(c, {{0, logger}, {1, meter}}, 3); });
+    Settings s = device_settings("logger", srv.port());
+    s.modbus_unit_id = 0;
+    s.meter_unit_id = 1;
+    const PlantReading p = read_plant(s);
+    CHECK(p.reading.power_kw == doctest::Approx(100.0));
+    CHECK(p.reading.e_daily_kwh == doctest::Approx(123.4));
+    CHECK(p.reading.e_total_kwh == doctest::Approx(98765.4));
+    CHECK(p.reading.pf == doctest::Approx(0.987));
+    CHECK(p.reading.status == 0x0200);
+    REQUIRE(p.load_kw);
+    CHECK(*p.load_kw == doctest::Approx(-1.5));
+    CHECK(p.meter_error.empty());
+
+    // noću: negativna snaga (vlastita potrošnja) se ne gubi
+    FakeRegisters night = logger;
+    put32(night, 40525, 40526, static_cast<uint32_t>(-2500));
+    LocalServer srv_night([&](SOCKET c) { serve_modbus(c, {{1, night}}, 3); });
+    Settings n = device_settings("logger", srv_night.port());
+    n.modbus_unit_id = 1;  // HW-03: SmartLogger s unit ID 1
+    n.meter_unit_id = 0;   // bez mjerača
+    const PlantReading q = read_plant(n);
+    CHECK(q.reading.power_kw == doctest::Approx(-2.5));
+    CHECK_FALSE(q.load_kw);
+
+    // HW-02: mjerač ne odgovara → očitanje elektrane ostaje, greška mjerača je zapisana
+    LocalServer srv_nometer([&](SOCKET c) { serve_modbus(c, {{0, logger}}, 3); });
+    Settings m = device_settings("logger", srv_nometer.port());
+    m.modbus_unit_id = 0;
+    m.meter_unit_id = 1;
+    const PlantReading r = read_plant(m);
+    CHECK(r.reading.power_kw == doctest::Approx(100.0));
+    CHECK_FALSE(r.load_kw);
+    CHECK_FALSE(r.meter_error.empty());
+}
+
+TEST_CASE("[device][huawei][S] HW-04/05/06: SUN2000 izravno – zbroj 3 invertera, dodaci, baterija, mjerač") {
+    NetInit net;
+    auto inverter = [](int32_t w, uint32_t daily_10wh, uint32_t total_10wh, bool battery) {
+        FakeRegisters f;
+        fill(f, 32060, 32120);
+        put32(f, 32080, 32081, static_cast<uint32_t>(w));         // I32 / 1000 → kW
+        put32(f, 32114, 32115, daily_10wh);                       // U32 / 100 → kWh
+        put32(f, 32106, 32107, total_10wh);                       // U32 / 100 → kWh
+        f.regs[32084] = 990;                                      // cos φ 0,990
+        f.regs[32089] = 0x0200;
+        f.regs[32087] = 415;                                      // 41,5 °C (I16 / 10)
+        f.regs[32069] = 2301;                                     // 230,1 V (U16 / 10)
+        f.regs[32085] = 5001;                                     // 50,01 Hz (U16 / 100)
+        fill(f, 37100, 37130);
+        put32(f, 37113, 37114, 2000);                             // mjerač 2,000 kW (I32 / 1000)
+        if (battery) {
+            fill(f, 37750, 37770);
+            f.regs[37760] = 850;                                  // SOC 85,0 % (U16 / 10)
+            put32(f, 37765, 37766, static_cast<uint32_t>(-1200)); // −1,2 kW (I32 / 1000)
+        }
+        return f;
+    };
+    const FakeRegisters u1 = inverter(3000, 1000, 500000, false), u2 = inverter(2000, 2000, 600000, false),
+                        u3 = inverter(1000, 3000, 700000, false);
+    LocalServer srv([&](SOCKET c) { serve_modbus(c, {{1, u1}, {2, u2}, {3, u3}}, 3); });
+    Settings s = device_settings("inverter", srv.port());
+    s.inverter_units = "1,2,3";
+    s.meter_unit_id = 1;
+    const PlantReading p = read_plant(s);
+    CHECK(p.reading.power_kw == doctest::Approx(6.0));            // 3 + 2 + 1
+    CHECK(p.reading.e_daily_kwh == doctest::Approx(60.0));        // 10 + 20 + 30
+    CHECK(p.reading.e_total_kwh == doctest::Approx(18000.0));     // 5000 + 6000 + 7000
+    CHECK(p.reading.pf == doctest::Approx(0.99));
+    CHECK(p.reading.status == 0x0200);
+    CHECK(p.extra["inverter_temp"] == doctest::Approx(41.5));
+    CHECK(p.extra["grid_v"] == doctest::Approx(230.1));
+    CHECK(p.extra["grid_hz"] == doctest::Approx(50.01));
+    CHECK_FALSE(p.extra.contains("battery_soc"));                 // HW-05: bez baterije nema ključeva baterije
+    CHECK_FALSE(p.extra.contains("battery_kw"));
+    REQUIRE(p.load_kw);
+    CHECK(*p.load_kw == doctest::Approx(-2.0));                   // HW-06: obrnuti predznak mjerača 37113
+    const auto caps = device_capabilities(s);
+    CHECK(std::find(caps.begin(), caps.end(), "battery") != caps.end());
+
+    const FakeRegisters b1 = inverter(3000, 1000, 500000, true);
+    LocalServer srv_b([&](SOCKET c) { serve_modbus(c, {{1, b1}}, 3); });
+    Settings b = device_settings("inverter", srv_b.port());
+    b.inverter_units = "1";
+    b.meter_unit_id = 0;
+    const PlantReading q = read_plant(b);
+    CHECK(q.extra["battery_soc"] == doctest::Approx(85.0));
+    CHECK(q.extra["battery_kw"] == doctest::Approx(-1.2));
+    CHECK(q.extra["battery_dir"] == true);
+}
+
+TEST_CASE("[device][huawei][S] HW-07/08/09: iznimka uređaja, prekid veze i oporavak, rok") {
+    NetInit net;
+    // HW-07: unit ne postoji → iznimka 0x02 s kodom u poruci
+    FakeRegisters empty;
+    LocalServer srv([&](SOCKET c) { serve_modbus(c, {{5, empty}}, 3); });
+    Settings s = device_settings("logger", srv.port());
+    s.modbus_unit_id = 0;
+    s.meter_unit_id = 0;
+    CHECK_THROWS_WITH(read_plant(s), doctest::Contains("2"));
+
+    // HW-08: prva veza se prekine bez odgovora, sljedeći krug (nova veza) uspijeva
+    FakeRegisters logger;
+    fill(logger, 40500, 40600);
+    put32(logger, 40525, 40526, 5000);
+    std::atomic<int> connections{0};
+    LocalServer flaky([&](SOCKET c) {
+        if (connections++ == 0) return;  // zatvori odmah
+        serve_modbus(c, {{0, logger}}, 3);
+    });
+    Settings f = device_settings("logger", flaky.port());
+    f.modbus_unit_id = 0;
+    f.meter_unit_id = 0;
+    CHECK_THROWS(read_plant(f));
+    CHECK(read_plant(f).reading.power_kw == doctest::Approx(5.0));
+
+    // HW-09: uređaj ne odgovara → greška unutar roka SmartLoggera (5 s), ne visi
+    LocalServer silent([&](SOCKET c) {
+        char buf[64];
+        recv(c, buf, sizeof buf, 0);
+        Sleep(8000);
+    });
+    Settings t = device_settings("logger", silent.port());
+    t.modbus_unit_id = 0;
+    t.meter_unit_id = 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK_THROWS(read_plant(t));
+    const auto secs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() / 1000.0;
+    CHECK(secs >= 4.0);
+    CHECK(secs < 7.5);
+}
+
+TEST_CASE("[device][vendor][S] Sungrow SH, Solis string i hibrid, Fox ESS, Growatt – cijeli put preko Modbus TCP-a") {
+    NetInit net;
+    auto run = [](const char* profile, int unit, uint8_t fc, FakeRegisters regs, int meter_unit = 0) {
+        LocalServer srv([&](SOCKET c) { serve_modbus(c, {{unit, regs}}, fc); });
+        Settings s = device_settings("vendor", srv.port());
+        s.device_profile = profile;
+        s.inverter_units = std::to_string(unit);
+        s.meter_unit_id = meter_unit;
+        return read_plant(s);
+    };
+    {   // Sungrow SH (input, niža riječ prva): snaga 5016/5017 = 4.200 W, danas 13001 = 12,3 kWh, ukupno 13002/13003 = 4.567,8 kWh
+        FakeRegisters f;
+        fill(f, 5000, 5040);
+        fill(f, 13000, 13025);
+        f.regs[5016] = 4200; f.regs[5017] = 0;
+        f.regs[13001] = 123;
+        f.regs[13002] = 45678; f.regs[13003] = 0;
+        f.regs[5007] = 352;                     // 35,2 °C
+        f.regs[13022] = 755;                    // SOC 75,5 %
+        f.regs[13021] = 900;                    // baterija 900 W (s16, bez smjera)
+        const PlantReading p = run("sungrow_sh", 1, 4, f);
+        CHECK(p.reading.power_kw == doctest::Approx(4.2));
+        CHECK(p.reading.e_daily_kwh == doctest::Approx(12.3));
+        CHECK(p.reading.e_total_kwh == doctest::Approx(4567.8));
+        CHECK(p.extra["inverter_temp"] == doctest::Approx(35.2));
+        CHECK(p.extra["battery_soc"] == doctest::Approx(75.5));
+        CHECK(p.extra["battery_kw"] == doctest::Approx(0.9));
+    }
+    {   // Solis string (input, viša riječ prva): snaga 3006/3007 = 5.100 W, danas 3014 = 21,7 kWh, ukupno 3008/3009 = 12.345 kWh
+        FakeRegisters f;
+        fill(f, 3000, 3045);
+        f.regs[3006] = 0; f.regs[3007] = 5100;
+        f.regs[3014] = 217;
+        f.regs[3008] = 0; f.regs[3009] = 12345;
+        f.regs[3041] = 401;                     // 40,1 °C
+        const PlantReading p = run("solis_string", 1, 4, f);
+        CHECK(p.reading.power_kw == doctest::Approx(5.1));
+        CHECK(p.reading.e_daily_kwh == doctest::Approx(21.7));
+        CHECK(p.reading.e_total_kwh == doctest::Approx(12345.0));
+        CHECK(p.extra["inverter_temp"] == doctest::Approx(40.1));
+    }
+    {   // Solis hibrid: snaga 33057/33058 = 70.000 W (viša riječ ≠ 0), danas 33035 = 5,5 kWh, ukupno 33029/33030 = 9.999 kWh
+        FakeRegisters f;
+        fill(f, 33020, 33065);
+        fill(f, 33090, 33150);
+        f.regs[33057] = 1; f.regs[33058] = 70000 - 65536;
+        f.regs[33035] = 55;
+        f.regs[33029] = 0; f.regs[33030] = 9999;
+        f.regs[33139] = 64;                     // SOC 64 %
+        f.regs[33149] = 0xFFFF; f.regs[33150] = static_cast<uint16_t>(-300);  // −300 W (s32, viša riječ prva)
+        const PlantReading p = run("solis_hybrid", 1, 4, f);
+        CHECK(p.reading.power_kw == doctest::Approx(70.0));
+        CHECK(p.reading.e_daily_kwh == doctest::Approx(5.5));
+        CHECK(p.reading.e_total_kwh == doctest::Approx(9999.0));
+        CHECK(p.extra["battery_soc"] == doctest::Approx(64.0));
+        CHECK(p.extra["battery_kw"] == doctest::Approx(-0.3));
+    }
+    {   // Fox ESS (holding, unit 247): PV1 31002 = 1.500 W + PV2 31005 = 1.000 W, danas 32002 = 8,8 kWh, ukupno 32000/32001 = 2.222,2 kWh
+        FakeRegisters f;
+        fill(f, 30990, 31020);
+        fill(f, 31995, 32005);
+        f.regs[31002] = 1500;
+        f.regs[31005] = 1000;
+        f.regs[32002] = 88;
+        f.regs[32000] = 0; f.regs[32001] = 22222;
+        const PlantReading p = run("foxess", 247, 3, f);
+        CHECK(p.reading.power_kw == doctest::Approx(2.5));
+        CHECK(p.reading.e_daily_kwh == doctest::Approx(8.8));
+        CHECK(p.reading.e_total_kwh == doctest::Approx(2222.2));
+    }
+    {   // Growatt (input, viša riječ prva, /10): snaga 35/36 = 3.250,0 W, danas 53/54 = 14,2 kWh, ukupno 55/56 = 6.543,2 kWh
+        FakeRegisters f;
+        fill(f, 0, 100);
+        f.regs[35] = 0; f.regs[36] = 32500;
+        f.regs[53] = 0; f.regs[54] = 142;
+        f.regs[55] = 0; f.regs[56] = 65432;
+        f.regs[93] = 389;                        // 38,9 °C
+        f.regs[38] = 2315;                       // 231,5 V
+        f.regs[37] = 4998;                       // 49,98 Hz
+        const PlantReading p = run("growatt", 1, 4, f);
+        CHECK(p.reading.power_kw == doctest::Approx(3.25));
+        CHECK(p.reading.e_daily_kwh == doctest::Approx(14.2));
+        CHECK(p.reading.e_total_kwh == doctest::Approx(6543.2));
+        CHECK(p.extra["inverter_temp"] == doctest::Approx(38.9));
+        CHECK(p.extra["grid_v"] == doctest::Approx(231.5));
+        CHECK(p.extra["grid_hz"] == doctest::Approx(49.98));
+    }
+}
