@@ -70,7 +70,7 @@ std::vector<DayKwh> DataService::daily(Db& db, Date start, Date end) {
 }
 
 std::vector<DayKwh> DataService::daily(Date start, Date end) {
-    Db db(db_path_);
+    Db db(db_path_, read_only_);
     return daily(db, start, end);
 }
 
@@ -153,7 +153,7 @@ json DataService::savings_json(const Settings& s, const std::vector<DayKwh>& rec
 
 json DataService::dashboard(const Settings& s) {
     std::lock_guard lock(mutex_);
-    Db db(db_path_);
+    Db db(db_path_, read_only_);
     const std::time_t t = now();
     const Date today = local_date(t);
     const Date month_start = first_of_month(today);
@@ -209,14 +209,14 @@ json DataService::dashboard(const Settings& s) {
 
 std::optional<std::pair<std::time_t, double>> DataService::peak_between(std::time_t start, std::time_t end) {
     std::lock_guard lock(mutex_);
-    Db db(db_path_);
+    Db db(db_path_, read_only_);
     return db.peak_power_between(start, end);
 }
 
 json DataService::db_info() {
     std::lock_guard lock(mutex_);
     if (!fs::exists(db_path_)) return {{"path", narrow(db_path_.wstring())}, {"readings", 0}};
-    Db db(db_path_);
+    Db db(db_path_, read_only_);
     const auto first = db.first_timestamp();
     const auto last = db.latest();
     return {{"path", narrow(db_path_.wstring())}, {"readings", db.total_readings()},

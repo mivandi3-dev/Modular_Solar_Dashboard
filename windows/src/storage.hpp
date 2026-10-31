@@ -32,9 +32,22 @@ struct HourAggregate {
     std::optional<double> load_avg, export_avg, import_avg;
 };
 
+// 4.0 (SMA-02): jedan redak povijesti za uvoz preko brokera (sučelje čita izvor, broker upisuje)
+struct HistoryRow {
+    std::string ts_utc;  // "YYYY-MM-DD HH:MM:SS"
+    std::optional<double> power_kw, e_daily_kwh, e_total_kwh, pf, load_kw;
+    std::optional<int64_t> status;
+};
+// Retci iz druge baze Solarnog monitora (samo čitanje), po ts_utc, od `after` (isključivo); najviše `limit`.
+// Baca ako datoteka nije baza s tablicom readings.
+std::vector<HistoryRow> read_history_rows(const fs::path& source, const std::string& after, int limit);
+// Provjera retka prije upisa (broker): vrijeme, konačni brojevi u razumnim rasponima
+bool valid_history_row(const HistoryRow& r);
+
 class Db {
 public:
-    explicit Db(const fs::path& path);
+    // read_only: sučelje u produkciji (mapa data\ je za Users samo za čitanje); baza mora postojati.
+    explicit Db(const fs::path& path, bool read_only = false);
     ~Db();
     Db(const Db&) = delete;
     Db& operator=(const Db&) = delete;
@@ -60,6 +73,7 @@ public:
     int64_t total_readings();
 
     int64_t import_history(const fs::path& source);  // vraća broj novih očitanja
+    int64_t insert_history_rows(const std::vector<HistoryRow>& rows);  // INSERT OR IGNORE; vraća broj novih
     void backup_to(const fs::path& target);
 
 private:

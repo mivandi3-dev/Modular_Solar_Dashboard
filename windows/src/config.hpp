@@ -95,6 +95,8 @@ struct Settings {
     // Solarni poslužitelj (SolarniServer.exe): port API-ja; server_lan=false → samo 127.0.0.1 (cloudflared)
     int server_port = 8700;
     bool server_lan = false;
+    // 4.0 (B1): API prima Rust gateway (solari-gateway.exe) preko kanala; false = rezervni put A (C++ HTTPS listener)
+    bool server_gateway = true;
 
     bool operator==(const Settings&) const = default;
 };
@@ -104,8 +106,15 @@ Settings settings_from_json(const json& j);  // nepoznata/neispravna polja → z
 
 bool is_configured();
 bool valid_host_name(const std::string& host);  // IPv4 ili naziv (bez razmaka, kontrolnih znakova, ':', '/')
-Settings load_settings();
-void save_settings(const Settings& s);  // atomično, prethodna verzija ostaje kao config.json.bak
+Settings load_settings();  // config.json + secrets\secrets.json (ako je čitljiva)
+// atomično; tajne (secret_keys) idu u secrets\secrets.json, config.json i config.json.bak su bez njih
+void save_settings(const Settings& s);
+const std::vector<std::string>& secret_keys();  // smtp_password_enc, cloud_*_enc, remote_view_key_enc, settings_pin_hash
+fs::path secrets_file();
+json strip_secrets(json j);
+// samo secrets.json (npr. PIN iz instalacije – config.json se ne stvara, pa čarobnjak ostaje)
+void save_secret_field(const std::string& key, const std::string& value);
+bool config_has_secrets();  // config.json iz 3.x/4.0.0 još sadrži tajne (prijenos u secrets.json)
 
 // Postavke Python verzije (instalirane ili iz C:\solari\.streamlit\secrets.toml) za predispunjavanje čarobnjaka.
 std::optional<Settings> legacy_settings();

@@ -92,9 +92,67 @@ bool no_reparse_points(const fs::path& dir) {
 }
 fs::path config_file() { return home_dir() / L"config.json"; }
 fs::path db_file() { return data_dir() / L"solar.db"; }
-fs::path layout_file() { return data_dir() / L"layout.json"; }
-fs::path images_dir() { return data_dir() / L"images"; }
-fs::path logs_dir() { return data_dir() / L"logs"; }
+fs::path ui_dir() { return home_dir() / L"ui"; }
+fs::path secrets_dir() { return home_dir() / L"secrets"; }
+fs::path layout_file() { return ui_dir() / L"layout.json"; }
+fs::path images_dir() { return ui_dir() / L"images"; }
+fs::path logs_dir() { return ui_dir() / L"logs"; }
+
+void migrate_ui_files() {
+    std::error_code ec;
+    const fs::path old_layout = data_dir() / L"layout.json";
+    if (!fs::exists(layout_file(), ec) && fs::exists(old_layout, ec)) {
+        fs::create_directories(ui_dir(), ec);
+        fs::copy_file(old_layout, layout_file(), fs::copy_options::skip_existing, ec);
+        if (!ec) log_info("Raspored kopiran u ui\\layout.json");
+    }
+    const fs::path old_images = data_dir() / L"images";
+    if (fs::is_directory(old_images, ec) && !fs::exists(images_dir(), ec)) {
+        fs::create_directories(images_dir(), ec);
+        fs::copy(old_images, images_dir(), fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
+        if (!ec) log_info("Slike kopirane u ui\\images");
+    }
+}
+
+bool dir_writable(const fs::path& dir) {
+    const fs::path probe = dir / widen(".write-test-" + std::to_string(GetCurrentProcessId()));
+    HANDLE h = CreateFileW(probe.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    CloseHandle(h);
+    return true;
+}
+
+void create_private_dir(const fs::path& dir) {
+    const DWORD a = GetFileAttributesW(dir.c_str());
+    if (a != INVALID_FILE_ATTRIBUTES) {
+        if (a & FILE_ATTRIBUTE_REPARSE_POINT) throw std::runtime_error("Mapa je spojnica ili simbolička veza: " + narrow(dir.wstring()));
+        return;
+    }
+    fs::create_directories(dir.parent_path());
+    HANDLE token = nullptr;
+    std::wstring me = L"SY";
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) {
+        DWORD size = 0;
+        GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+        std::vector<uint8_t> buf(size ? size : 1);
+        LPWSTR text = nullptr;
+        if (size && GetTokenInformation(token, TokenUser, buf.data(), size, &size) &&
+            ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(buf.data())->User.Sid, &text)) {
+            me = text;
+            LocalFree(text);
+        }
+        CloseHandle(token);
+    }
+    const std::wstring sddl = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + me + L")";
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr)) {
+        throw std::runtime_error("Zaštita mape nije uspjela");
+    }
+    SECURITY_ATTRIBUTES sa{sizeof sa, sd, FALSE};
+    const BOOL ok = CreateDirectoryW(dir.c_str(), &sa);
+    LocalFree(sd);
+    if (!ok && GetLastError() != ERROR_ALREADY_EXISTS) throw std::runtime_error("Mapa se ne može stvoriti: " + narrow(dir.wstring()));
+}
 fs::path backups_dir() { return service_dir() / L"backups"; }
 
 // ---------------------------------------------------------------- zapisnik

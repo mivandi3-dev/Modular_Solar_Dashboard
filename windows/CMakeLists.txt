@@ -18,7 +18,8 @@ add_library(solari_core STATIC
     src/weather.cpp src/net.cpp src/poller.cpp src/system.cpp src/images.cpp src/i18n.cpp
     src/secret.cpp src/alerts.cpp src/report.cpp src/remote.cpp src/dashboard.cpp src/cloud.cpp src/api.cpp
     src/service.cpp src/smartlogger_export.cpp src/sunspec.cpp src/fronius.cpp src/vendors.cpp
-    src/crypto.cpp src/users.cpp src/tls.cpp src/totp.cpp src/serial.cpp src/offgrid.cpp src/webguard.cpp)
+    src/crypto.cpp src/users.cpp src/tls.cpp src/totp.cpp src/serial.cpp src/offgrid.cpp src/webguard.cpp
+    src/ipc.cpp src/broker.cpp src/api_ipc.cpp)
 target_include_directories(solari_core PUBLIC src third_party third_party/webview2/include)
 target_compile_definitions(solari_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00
                                               SOLARI_VERSION="${PROJECT_VERSION}")
@@ -56,6 +57,8 @@ add_executable(SolarniServer WIN32 src/server_main.cpp src/app.cpp src/webview.c
 option(SOLARI_DEV_NO_UAC "Solarni poslužitelj bez zahtjeva za administratorskim pravima (samo razvoj)" OFF)
 if(SOLARI_DEV_NO_UAC)
     set_source_files_properties(res/server.rc PROPERTIES COMPILE_DEFINITIONS SOLARI_DEV_NO_UAC)
+    # 4.0 (B1): razvojna gradnja smije uzeti SID gatewaya i ime kanala iz okoline (SOLARI_DEV_GATEWAY_SID/_API_PIPE)
+    target_compile_definitions(solari_core PUBLIC SOLARI_DEV_BUILD)
 endif()
 target_link_libraries(SolarniServer PRIVATE solari_core)
 target_link_options(SolarniServer PRIVATE -static -municode)
@@ -63,7 +66,7 @@ add_dependencies(SolarniServer runtime_files)
 
 # ---------------------------------------------------------------- testovi (doctest)
 enable_testing()
-add_executable(solari_tests tests/test_main.cpp tests/test_security.cpp)
+add_executable(solari_tests tests/test_main.cpp tests/test_security.cpp tests/test_b1.cpp)
 target_link_libraries(solari_tests PRIVATE solari_core)
 target_link_options(solari_tests PRIVATE -static)
 target_compile_definitions(solari_tests PRIVATE SOLARI_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

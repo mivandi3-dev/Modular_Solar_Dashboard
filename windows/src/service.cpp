@@ -1,11 +1,16 @@
 // Solarni poslužitelj bez prozora (SolarniServer.exe --service, zadatak sustava iz instalacije):
 // bilježi logger u bazu (poller), šalje obavijesti i poslužuje API za klijente (src/api.cpp).
+// 4.0 (B1): API prima Rust gateway (solari-gateway.exe) i prosljeđuje ga kanalom (src/api_ipc.cpp);
+// uz "server_gateway": false radi rezervni put A (C++ HTTPS listener).
 // Promjene postavki (port, pristup iz mreže, logger, slike) preuzima sam, bez ponovnog pokretanja.
 #include <windows.h>
 
+#include <memory>
 #include <mutex>
+#include <regex>
 
 #include "api.hpp"
+#include "api_ipc.hpp"
 #include "i18n.hpp"
 #include "poller.hpp"
 #include "system.hpp"
@@ -53,26 +58,102 @@ int run_server_service() {
 
     Poller poller;
     poller.start();
-    // HTTPS u lokalnoj mreži; bez certifikata API sluša samo na 127.0.0.1 (nikad nešifrirano u mreži)
-    std::shared_ptr<TlsCredentials> tls;
-    try {
-        tls = std::make_shared<TlsCredentials>();
-        log_info("HTTPS: otisak certifikata " + tls->cert().fingerprint);
-    } catch (const std::exception& e) {
-        log_error(std::string("HTTPS: ") + e.what() + " – API samo na 127.0.0.1");
-    }
-    const auto lan = [&](bool want) { return want && tls != nullptr; };
-    HttpServer api(api_handler({&data, &weather, &catalog, users.get(), [&] {
+    migrate_ui_files();  // slike poslužitelja iz data\ u ui\ (mapa poslužitelja je samo za administratore)
+    const auto api = api_handler({&data, &weather, &catalog, users.get(), [&] {
         std::lock_guard lock(settings_mutex);
         return settings;
-    }}));
-    if (tls) api.set_tls(tls);
-    api.start(settings.server_port, lan(settings.server_lan));
+    }});
+
+    // ------------------------------------------------ B1: Rust gateway + kanal (ADR-001)
+    std::unique_ptr<ipc::PipeServer> pipe;
+    std::wstring gateway_sid = ipc::service_sid(kGatewayService);
+    bool owner_system = true;
+#ifdef SOLARI_DEV_BUILD
+    // samo razvojna gradnja (testovi bez administratora): SID gatewaya i ime kanala iz okoline
+    if (const wchar_t* sid = _wgetenv(L"SOLARI_DEV_GATEWAY_SID"); sid && *sid) {
+        gateway_sid = sid;
+        owner_system = false;
+    }
+    const wchar_t* dev_pipe = _wgetenv(L"SOLARI_DEV_API_PIPE");
+    const std::wstring pipe_name = dev_pipe && *dev_pipe ? dev_pipe : kApiPipe;
+#else
+    const std::wstring pipe_name = kApiPipe;
+#endif
+    const auto start_pipe = [&] {
+        ipc::PipeServerConfig cfg;
+        cfg.name = pipe_name;
+        cfg.sddl = api_pipe_sddl(gateway_sid, owner_system);
+        cfg.instances = 8;
+        cfg.io_timeout_ms = 15'000;
+        cfg.idle_timeout_ms = 0;            // gateway drži veze otvorenima
+        cfg.requests_per_connection = 0;
+        cfg.max_request_bytes = ipc::kMaxRequestBytes;
+        cfg.authorize = [gateway_sid](const ipc::Caller& c) { return c.sid == gateway_sid; };  // samo usluga gatewaya
+        auto server = std::make_unique<ipc::PipeServer>(
+            cfg, api_ipc_handler(api,
+                                 [&] {
+                                     std::lock_guard lock(settings_mutex);
+                                     return GatewayConfig{settings.server_port, settings.server_lan};
+                                 },
+                                 [](const json& hello) {
+                                     static const std::regex fp(R"(^([0-9A-F]{2}:){31}[0-9A-F]{2}$)");
+                                     const std::string f = hello.value("fingerprint", std::string());
+                                     if (!std::regex_match(f, fp)) return;
+                                     json info = {{"fingerprint", f}, {"not_after", hello.value("not_after", std::string())},
+                                                  {"version", hello.value("version", std::string())}, {"updated", utc_text(now())}};
+                                     if (const auto old = gateway_info(); old && (*old)["fingerprint"] == f) return;
+                                     if (no_reparse_points(service_dir())) {
+                                         write_file_atomic(gateway_info_file(), info.dump(2));
+                                         log_info("Gateway: otisak certifikata " + f);
+                                     }
+                                 }));
+        server->start();
+        log_info("API: kanal za gateway " + narrow(pipe_name) + " (C++ nema TCP port za API)");
+        return server;
+    };
+
+    // ------------------------------------------------ A (rezerva): C++ HTTPS listener
+    // HTTPS u lokalnoj mreži; bez certifikata API sluša samo na 127.0.0.1 (nikad nešifrirano u mreži)
+    std::shared_ptr<TlsCredentials> tls;
+    std::unique_ptr<HttpServer> http;
+    const auto lan = [&](bool want) { return want && tls != nullptr; };
+    const auto start_http = [&] {
+        if (!tls) {
+            try {
+                tls = std::make_shared<TlsCredentials>();
+                log_info("HTTPS: otisak certifikata " + tls->cert().fingerprint);
+            } catch (const std::exception& e) {
+                log_error(std::string("HTTPS: ") + e.what() + " – API samo na 127.0.0.1");
+            }
+        }
+        auto server = std::make_unique<HttpServer>(api);
+        if (tls) server->set_tls(tls);
+        server->start(settings.server_port, lan(settings.server_lan));
+        log_warn("API: rezervni put A – C++ HTTP poslužitelj na portu " + std::to_string(settings.server_port));
+        return server;
+    };
+
+    bool gateway_mode = settings.server_gateway;
+    const auto switch_mode = [&] {
+        try {
+            if (gateway_mode) {
+                http.reset();
+                if (!pipe) pipe = start_pipe();
+            } else {
+                pipe.reset();
+                if (!http) http = start_http();
+            }
+        } catch (const std::exception& e) {
+            log_error(std::string("API: ") + e.what());
+        }
+    };
+    switch_mode();
     for (;;) {  // poslužitelj ne smije sam izaći – greška se zapiše i nastavlja se
         Sleep(kCheckMs);
         try {
             if (config_stamp() == stamp) {
-                if (!api.port()) api.start(settings.server_port, lan(settings.server_lan));  // npr. port je bio zauzet
+                if (gateway_mode && !pipe) switch_mode();  // npr. ime kanala je bilo zauzeto
+                if (!gateway_mode && http && !http->port()) http->start(settings.server_port, lan(settings.server_lan));
                 continue;
             }
             stamp = config_stamp();
@@ -85,7 +166,13 @@ int run_server_service() {
             }
             set_language(next.language);
             log_info("Postavke poslužitelja promijenjene");
-            if (restart) api.start(next.server_port, lan(next.server_lan));
+            if (next.server_gateway != gateway_mode) {
+                gateway_mode = next.server_gateway;
+                switch_mode();
+            } else if (restart && http) {
+                http->start(next.server_port, lan(next.server_lan));
+            }
+            // u načinu gatewaya port i sučelje preuzima gateway porukom "config"
         } catch (const std::exception& e) {
             log_error(std::string("Poslužitelj: ") + e.what());
         }

@@ -2,6 +2,7 @@
 //   SolarniMonitor.exe            aplikacija (dashboard, postavke, poller u pozadini)
 //   SolarniMonitor.exe --poller   samo bilježenje podataka (zadatak sustava iz instalacije)
 #include <windows.h>
+#include <shellapi.h>
 #include <objbase.h>
 #include <shobjidl.h>
 
@@ -9,6 +10,7 @@
 
 #include "app.hpp"
 #include "i18n.hpp"
+#include "broker.hpp"
 #include "poller.hpp"
 #include "system.hpp"
 #include "util.hpp"
@@ -23,6 +25,17 @@ App& app() {
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmdline, int) {
     using namespace sm;
     if (std::wstring(cmdline).find(L"--poller") != std::wstring::npos) return run_poller_mode();
+    // 4.0 (SMA-02): instalacija (administrator) postavlja PIN postavki: --set-pin-file "<datoteka>" (datoteka se briše)
+    if (std::wstring(cmdline).find(L"--set-pin-file") != std::wstring::npos) {
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        int code = 2;
+        for (int i = 1; argv && i + 1 < argc; ++i) {
+            if (std::wstring(argv[i]) == L"--set-pin-file") code = set_pin_from_file(argv[i + 1]);
+        }
+        if (argv) LocalFree(argv);
+        return code;
+    }
 
     NamedMutex single(L"Local\\SolarniMonitor2App");
     if (!single.owned()) {

@@ -2,6 +2,7 @@
 
 #include <sqlite3.h>
 
+#include <cmath>
 #include <stdexcept>
 
 #include "i18n.hpp"
@@ -64,7 +65,18 @@ void exec(sqlite3* db, const char* sql) {
 
 }  // namespace
 
-Db::Db(const fs::path& path) : path_(path) {
+Db::Db(const fs::path& path, bool read_only) : path_(path) {
+    if (read_only) {
+        // WAL bez prava upisa: -wal i -shm moraju postojati (poller ih drži trajno, SQLITE_FCNTL_PERSIST_WAL)
+        if (sqlite3_open_v2(narrow(path.wstring()).c_str(), &db_, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+            std::string msg = sqlite3_errmsg(db_);
+            sqlite3_close(db_);
+            db_ = nullptr;
+            throw std::runtime_error("Baza se ne može otvoriti: " + msg);
+        }
+        sqlite3_busy_timeout(db_, 10'000);
+        return;
+    }
     fs::create_directories(path.parent_path());
     if (sqlite3_open(narrow(path.wstring()).c_str(), &db_) != SQLITE_OK) {
         std::string msg = sqlite3_errmsg(db_);
@@ -73,6 +85,9 @@ Db::Db(const fs::path& path) : path_(path) {
     }
     sqlite3_busy_timeout(db_, 10'000);
     exec(db_, "PRAGMA journal_mode=WAL");
+    // 4.0 (SMA-02): -wal i -shm ostaju i nakon zatvaranja, pa ih sučelje bez prava upisa može koristiti za čitanje
+    int persist = 1;
+    sqlite3_file_control(db_, "main", SQLITE_FCNTL_PERSIST_WAL, &persist);
     exec(db_, kSchema);
     // stupac extra (JSON s podacima uređaja) – starije baze ga nemaju
     Stmt has_extra(db_, "SELECT COUNT(*) FROM pragma_table_info('readings') WHERE name = 'extra'");
@@ -218,6 +233,68 @@ int64_t Db::import_history(const fs::path& source) {
         throw;
     }
     exec(db_, "DETACH DATABASE src");
+    return total_readings() - before;
+}
+
+std::vector<HistoryRow> read_history_rows(const fs::path& source, const std::string& after, int limit) {
+    sqlite3* src = nullptr;
+    if (sqlite3_open_v2(narrow(source.wstring()).c_str(), &src, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        sqlite3_close(src);
+        throw std::runtime_error(tr("Odabrana datoteka nije baza Solarnog monitora (nema tablice readings)."));
+    }
+    std::vector<HistoryRow> rows;
+    try {
+        Stmt check(src, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='readings'");
+        check.step();
+        if (check.i64(0) == 0) throw std::runtime_error(tr("Odabrana datoteka nije baza Solarnog monitora (nema tablice readings)."));
+        Stmt has_load(src, "SELECT COUNT(*) FROM pragma_table_info('readings') WHERE name = 'load_kw'");
+        has_load.step();
+        const bool load = has_load.i64(0) != 0;
+        Stmt q(src, load ? "SELECT ts_utc, power_kw, e_daily_kwh, e_total_kwh, pf, status, load_kw FROM readings WHERE ts_utc > ? ORDER BY ts_utc LIMIT ?"
+                         : "SELECT ts_utc, power_kw, e_daily_kwh, e_total_kwh, pf, status, NULL FROM readings WHERE ts_utc > ? ORDER BY ts_utc LIMIT ?");
+        q.bind(1, after).bind(2, int64_t{limit});
+        while (q.step()) {
+            HistoryRow r;
+            r.ts_utc = q.text(0);
+            r.power_kw = q.opt(1);
+            r.e_daily_kwh = q.opt(2);
+            r.e_total_kwh = q.opt(3);
+            r.pf = q.opt(4);
+            if (const auto st = q.opt(5)) r.status = static_cast<int64_t>(*st);
+            r.load_kw = q.opt(6);
+            rows.push_back(std::move(r));
+        }
+    } catch (...) {
+        sqlite3_close(src);
+        throw;
+    }
+    sqlite3_close(src);
+    return rows;
+}
+
+bool valid_history_row(const HistoryRow& r) {
+    if (r.ts_utc.size() != 19 || !parse_utc_text(r.ts_utc)) return false;
+    const auto in = [](const std::optional<double>& v, double lo, double hi) { return !v || (std::isfinite(*v) && *v >= lo && *v <= hi); };
+    return in(r.power_kw, -1e6, 1e6) && in(r.e_daily_kwh, -1e6, 1e7) && in(r.e_total_kwh, -1e6, 1e12) && in(r.pf, -2, 2) &&
+           in(r.load_kw, -1e6, 1e6) && (!r.status || (*r.status >= 0 && *r.status <= 0xFFFFFFFFLL));
+}
+
+int64_t Db::insert_history_rows(const std::vector<HistoryRow>& rows) {
+    const int64_t before = total_readings();
+    exec(db_, "BEGIN");
+    try {
+        for (const auto& r : rows) {
+            Stmt st(db_, "INSERT OR IGNORE INTO readings (ts_utc, power_kw, e_daily_kwh, e_total_kwh, pf, status, load_kw)"
+                         " VALUES (?, ?, ?, ?, ?, ?, ?)");
+            st.bind(1, r.ts_utc).bind(2, r.power_kw).bind(3, r.e_daily_kwh).bind(4, r.e_total_kwh).bind(5, r.pf).bind(7, r.load_kw);
+            if (r.status) st.bind(6, *r.status);
+            st.step();
+        }
+        exec(db_, "COMMIT");
+    } catch (...) {
+        sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, nullptr);
+        throw;
+    }
     return total_readings() - before;
 }
 

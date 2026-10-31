@@ -8,6 +8,7 @@
 
 #include "alerts.hpp"
 #include "api.hpp"
+#include "api_ipc.hpp"
 #include "crypto.hpp"
 #include "secret.hpp"
 #include "serial.hpp"
@@ -117,11 +118,19 @@ json server_state(App& app) {
         }
     }
     std::optional<ServerCert> cert;
-    try {
-        cert = find_server_certificate();
-        if (!cert && s.server_lan) cert = ensure_server_certificate();  // aplikacija bez servisa
-    } catch (const std::exception& e) {
-        log_warn(std::string("HTTPS: ") + e.what());
+    if (s.server_gateway) {  // 4.0 (B1): certifikat ima gateway; otisak javlja servisu porukom hello (service\gateway.json)
+        if (const auto g = gateway_info()) {
+            cert = ServerCert{};
+            cert->fingerprint = (*g)["fingerprint"].get<std::string>();
+            cert->not_after = g->value("not_after", std::string());
+        }
+    } else {
+        try {
+            cert = find_server_certificate();
+            if (!cert && s.server_lan) cert = ensure_server_certificate();  // aplikacija bez servisa
+        } catch (const std::exception& e) {
+            log_warn(std::string("HTTPS: ") + e.what());
+        }
     }
     const auto me = app.admin();
     return {{"urls", urls}, {"in_app", app.api_port() != 0}, {"task", poller_task_installed()},
@@ -141,12 +150,19 @@ json cloud_login_call(App& app, const json& form) {
                                          cur.cloud_url == *url ? cur.cloud_cert_pin : std::string{}, form.value("totp", std::string{}),
                                          form.value("new_password", std::string{}), form.value("pairing_code", std::string{}));
         if (cur.cloud_url != *url || !cur.cloud_token_enc.empty()) cloud_logout(cur);  // stara prijava ne ostaje aktivna
-        app.update_settings([&](Settings& s) {
-            s.cloud_url = *url;
-            s.cloud_token_enc = protect_secret(r.token);
-            s.cloud_account_enc = protect_secret(r.account.dump());
-            s.cloud_cert_pin = r.pin;
-        });
+        if (app.broker_mode()) {  // SMA-02: sprema broker (oznaka šifrirana DPAPI-jem računala u secrets.json)
+            const json st = app.broker({{"op", "cloud_login"}, {"cloud_url", *url}, {"token", r.token}, {"account", r.account},
+                                        {"cert_pin", r.pin}});
+            if (!st.value("ok", false)) return fail(st.value("message", tr("Postavke nisu spremljene.")));
+            app.set_settings_from_broker(st);
+        } else {
+            app.update_settings([&](Settings& s) {
+                s.cloud_url = *url;
+                s.cloud_token_enc = protect_secret(r.token);
+                s.cloud_account_enc = protect_secret(r.account.dump());
+                s.cloud_cert_pin = r.pin;
+            });
+        }
         log_info("Prijava na Solarni poslužitelj " + *url + (r.pin.empty() ? "" : " (otisak " + r.pin + ")"));
         return ok(tr("Prijavljeni ste kao {name}.", {{"name", r.account.value("name", "")}}),
                   {{"account", r.account}, {"pin", r.pin}, {"cloud_url", *url}, {"recovery_codes", r.recovery_codes}});
@@ -163,6 +179,12 @@ json cloud_login_call(App& app, const json& form) {
 
 json cloud_logout_call(App& app) {
     cloud_logout(app.settings());
+    if (app.broker_mode()) {
+        const json st = app.broker({{"op", "cloud_logout"}});
+        if (!st.value("ok", false)) return fail(st.value("message", tr("Postavke nisu spremljene.")));
+        app.set_settings_from_broker(st);
+        return ok(tr("Odjavljeni ste."));
+    }
     app.update_settings([](Settings& s) {
         s.cloud_token_enc.clear();
         s.cloud_account_enc.clear();
@@ -420,7 +442,17 @@ json save_settings_call(App& app, const json& form) {
         log_warn(std::string("Pokretanje pri prijavi: ") + e.what());
     }
     try {
-        app.apply_settings(*v.settings);
+        if (app.broker_mode()) {  // SMA-02: isti validator ponovno u brokeru (s tajnama koje sučelje nema)
+            const json st = app.broker({{"op", "save_settings"}, {"form", form}});
+            if (!st.value("ok", false)) {
+                json extra = json::object();
+                if (st.contains("errors")) extra["errors"] = st["errors"];
+                return fail(st.value("message", tr("Postavke nisu spremljene.")), extra);
+            }
+            app.apply_settings(App::settings_from_broker(st), false);
+        } else {
+            app.apply_settings(*v.settings);
+        }
     } catch (const std::exception& e) {
         return fail(tr("Postavke nisu spremljene: {error}", {{"error", e.what()}}));
     }
@@ -443,8 +475,23 @@ json import_smartlogger(App& app, const fs::path& source) {
     try {
         const auto days = parse_perfmg_day(read_perfmg_day(source));
         if (days.empty()) return fail(tr("U izvozu nema dnevne proizvodnje elektrane."));
-        Db db(db_file());
-        const ExportImport r = import_perfmg_days(db, days, local_date(now()));
+        ExportImport r;
+        if (app.broker_mode()) {  // SMA-02: sučelje čita i raščlanjuje datoteku, broker upisuje samo dane
+            json list = json::array();
+            for (const auto& [d, kwh] : days) list.push_back(json::array({iso_date(d), kwh}));
+            const json st = app.broker({{"op", "import_days"}, {"days", list}});
+            if (!st.value("ok", false)) return fail(st.value("message", tr("Uvoz nije uspio.")));
+            r.imported = st.value("imported", 0);
+            r.skipped = st.value("skipped", 0);
+            r.kwh = st.value("kwh", 0.0);
+            if (r.imported) {
+                r.first = days.begin()->first;
+                r.last = days.rbegin()->first;
+            }
+        } else {
+            Db db(db_file());
+            r = import_perfmg_days(db, days, local_date(now()));
+        }
         log_info("Izvoz SmartLoggera " + narrow(source.wstring()) + ": uvezeno " + std::to_string(r.imported) +
                  " dana, preskočeno " + std::to_string(r.skipped));
         std::string msg = r.imported
@@ -461,7 +508,28 @@ json import_smartlogger(App& app, const fs::path& source) {
 
 json import_history(App& app, const fs::path& source) {
     try {
-        const int64_t added = Db(db_file()).import_history(source);
+        int64_t added = 0;
+        if (app.broker_mode()) {  // SMA-02: retci u dijelovima ≤ 64 KB; broker ih validira i upisuje
+            std::error_code ec;
+            if (fs::equivalent(source, db_file(), ec)) throw std::runtime_error(tr("Odabrana je ista baza koju aplikacija već koristi."));
+            std::string after;
+            for (;;) {
+                const auto rows = read_history_rows(source, after, 400);
+                if (rows.empty()) break;
+                json list = json::array();
+                const auto opt = [](const std::optional<double>& v) { return v ? json(*v) : json(nullptr); };
+                for (const auto& h : rows) {
+                    list.push_back(json::array({h.ts_utc, opt(h.power_kw), opt(h.e_daily_kwh), opt(h.e_total_kwh), opt(h.pf),
+                                                h.status ? json(*h.status) : json(nullptr), opt(h.load_kw)}));
+                }
+                const json st = app.broker({{"op", "import_rows"}, {"rows", list}});
+                if (!st.value("ok", false)) throw std::runtime_error(st.value("message", tr("Uvoz nije uspio.")));
+                added += st.value("added", int64_t{0});
+                after = rows.back().ts_utc;
+            }
+        } else {
+            added = Db(db_file()).import_history(source);
+        }
         log_info("Uvezeno " + std::to_string(added) + " očitanja iz " + narrow(source.wstring()));
         return ok(tr("Uvezeno {n} očitanja.", {{"n", fmt_num(static_cast<double>(added), 0)}}), {{"db", app.data().db_info()}});
     } catch (const std::exception& e) {

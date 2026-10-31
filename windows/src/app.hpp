@@ -55,8 +55,17 @@ public:
     void close_settings();
     void quit();
     void reload_dashboard();
-    void apply_settings(const Settings& s);  // spremi i primijeni (u čarobnjaku otvara dashboard)
-    void update_settings(const std::function<void(Settings&)>& change);
+    // spremi i primijeni (u čarobnjaku otvara dashboard); persist=false: već spremio broker
+    void apply_settings(const Settings& s, bool persist = true);
+    void update_settings(const std::function<void(Settings&)>& change);  // ne smije se zvati u načinu brokera
+
+    // 4.0 (SMA-02, W4): sučelje bez prava upisa u %ProgramData% – postavke i uvoz idu kroz broker (src/broker.cpp)
+    bool broker_mode() const { return broker_mode_; }
+    // poziv brokera s PIN-om otključanih postavki; greška kanala → {ok:false, error:"service", message}
+    json broker(json request);
+    // stanje brokera ({settings, secrets, pin_set…}) → Settings za ovo sučelje (bez SMTP lozinke i hasha PIN-a)
+    static Settings settings_from_broker(const json& state);
+    void set_settings_from_broker(const json& state);  // samo zamjena u memoriji
     std::string new_remote_view_key();   // pregled iz mreže (SMA-08): novi ključ, sprema se šifriran
     std::string remote_view_key() const;  // samo izmjena i spremanje (prijava na poslužitelj)
     void set_display(bool on);               // noćni način (web/overlay.js): ugasi ili upali zaslon
@@ -81,6 +90,7 @@ private:
     void on_message(WindowKind kind, const std::string& message);
     void tick();  // svake minute: dnevno osvježavanje stranice
     void update_remote();  // pregled iz mreže prema postavkama
+    json ipc_check_pin(const std::string& pin);
     void update_api();     // poslužitelj: API u ovom procesu ako ga ne vodi zadatak sustava
 
     mutable std::mutex mutex_;
@@ -97,6 +107,8 @@ private:
     std::string admin_token_;
     bool display_on_ = true;
     bool server_role_ = false;
+    bool broker_mode_ = false;
+    std::string broker_pin_;  // pod mutex_; samo dok je prozor postavki otključan
     std::unique_ptr<WebViewWindow> main_, settings_window_;
     std::atomic<bool> fullscreen_{false}, sidebar_open_{true}, wizard_{false}, settings_unlocked_{false};
     std::string settings_panel_;

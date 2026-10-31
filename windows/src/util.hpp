@@ -24,12 +24,23 @@ std::string trim(std::string_view s);
 // exe_dir: mapa programa (web/, assets/). home_dir: %ProgramData%\SolarniMonitor2 ili SOLARI2_HOME.
 fs::path exe_dir();
 fs::path home_dir();
-fs::path data_dir();     // home/data: solar.db, layout.json, images/, backups/, logs/
+fs::path data_dir();     // home/data: solar.db (piše zadatak sustava; sučelje samo čita)
 fs::path config_file();  // home/config.json
 fs::path db_file();
-fs::path layout_file();
-fs::path images_dir();
-fs::path logs_dir();       // zapisi sučelja (data\logs)
+fs::path layout_file();    // 4.0: ui\layout.json
+fs::path images_dir();     // 4.0: ui\images
+fs::path logs_dir();       // zapisi sučelja (4.0: ui\logs)
+// 4.0 (SMA-02, W4): datoteke samo za sučelje – Users ih mijenjaju, zadatak sustava (SYSTEM) ih nikad ne čita ni ne piše
+fs::path ui_dir();
+// 4.0: tajne postavki (secrets.json) – mapa sa zaštićenim DACL-om: SYSTEM, administratori i tvorac
+fs::path secrets_dir();
+// Raspored i slike iz data\ (3.x i 4.0.0) kopiraju se u ui\ ako tamo još ne postoje (izvor ostaje).
+void migrate_ui_files();
+// Može li ovaj proces stvoriti datoteku u mapi (produkcija: sučelje ne može pisati u home ni data)
+bool dir_writable(const fs::path& dir);
+// Mapa s DACL-om D:P SYSTEM + administratori + trenutni korisnik (nasljeđuje se); postojeća se ne mijenja.
+// Baca ako je mapa točka ponovne obrade.
+void create_private_dir(const fs::path& dir);
 fs::path backups_dir();    // 4.0: service\backups (piše samo SYSTEM)
 // 4.0 (SMA-02): mapa u koju piše samo zadatak sustava (SYSTEM) – instalacija joj daje ACL samo za SYSTEM i
 // administratore (Users čitanje): sigurnosne kopije, alerts.json, zapisi pollera i servisa

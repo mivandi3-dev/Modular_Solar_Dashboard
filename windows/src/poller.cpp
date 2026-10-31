@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "alerts.hpp"
+#include "broker.hpp"
 #include "fronius.hpp"
 #include "modbus.hpp"
 #include "sunspec.hpp"
@@ -340,6 +341,32 @@ int run_poller_mode() {
     if (!mutex.owned()) {
         log_info("Poller već radi – ova instanca se zatvara");
         return 0;
+    }
+    // 4.0 (SMA-02, W4): broker postavki – jedini put kojim sučelje mijenja postavke i bazu u produkciji
+    if (config_has_secrets()) {  // config.json iz 3.x/4.0.0: tajne se premještaju u secrets\secrets.json
+        try {
+            save_settings(load_settings());
+            log_info("Tajne premještene iz config.json u secrets\\secrets.json");
+        } catch (const std::exception& e) {
+            log_error(std::string("Premještanje tajni nije uspjelo: ") + e.what());
+        }
+    }
+    std::unique_ptr<BrokerServer> broker;
+    if (const std::string problem = broker_home_problem(); !problem.empty()) {
+        log_error("Broker postavki se ne pokreće: " + problem + " (popravite instalacijom)");
+    } else {
+        try {
+            broker = std::make_unique<BrokerServer>([] {
+                std::vector<std::string> names;
+                for (const auto& i : list_interfaces()) names.push_back(i.name);
+                return names;
+            });
+            broker->start();
+            log_info("Broker postavki pokrenut");
+        } catch (const std::exception& e) {
+            broker.reset();
+            log_error(std::string("Broker postavki: ") + e.what());
+        }
     }
     const std::atomic<bool> never{false};
     loop(never);

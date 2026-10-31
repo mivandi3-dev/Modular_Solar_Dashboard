@@ -128,7 +128,7 @@ json to_json(const Settings& s, bool include_pin_hash) {
         {"alert_offline_min", s.alert_offline_min}, {"alert_low_production", s.alert_low_production},
         {"alert_fault", s.alert_fault}, {"data_source", s.data_source}, {"cloud_url", s.cloud_url},
         {"cloud_token_enc", s.cloud_token_enc}, {"cloud_account_enc", s.cloud_account_enc}, {"cloud_cert_pin", s.cloud_cert_pin},
-        {"server_port", s.server_port}, {"server_lan", s.server_lan},
+        {"server_port", s.server_port}, {"server_lan", s.server_lan}, {"server_gateway", s.server_gateway},
     };
     if (include_pin_hash) j["settings_pin_hash"] = s.settings_pin_hash;
     return j;
@@ -204,6 +204,7 @@ Settings settings_from_json(const json& j) {
     if (const auto u = normalize_server_url(s.cloud_url)) s.cloud_url = *u;  // stari http://IP:8700 → https
     read(j, "server_port", s.server_port);
     read(j, "server_lan", s.server_lan);
+    read(j, "server_gateway", s.server_gateway);
     if (s.data_source != "local" && s.data_source != "cloud") s.data_source = "local";
     if (!one_of(s.night_mode, kNightModes)) s.night_mode = "off";
     if (!one_of(s.smtp_security, kSmtpSecurity)) s.smtp_security = "starttls";
@@ -224,22 +225,79 @@ bool valid_host_name(const std::string& host) {
 
 bool is_configured() { return fs::exists(config_file()); }
 
+const std::vector<std::string>& secret_keys() {
+    static const std::vector<std::string> keys = {"smtp_password_enc", "cloud_token_enc", "cloud_account_enc", "remote_view_key_enc",
+                                                  "settings_pin_hash"};
+    return keys;
+}
+
+fs::path secrets_file() { return secrets_dir() / L"secrets.json"; }
+
+json strip_secrets(json j) {
+    for (const auto& k : secret_keys()) j.erase(k);
+    return j;
+}
+
 Settings load_settings() {
     const auto text = read_file(config_file());
-    if (!text) return Settings{};
     try {
-        return settings_from_json(json::parse(*text));
+        json j = text ? json::parse(*text) : json::object();  // bez config.json: zadano + tajne (PIN iz instalacije)
+        // 4.0: tajne su u secrets\secrets.json (sučelje bez prava je ne može pročitati – dobiva ih od brokera)
+        if (const auto secrets = read_file(secrets_file())) {
+            const json sj = json::parse(*secrets, nullptr, false);
+            if (sj.is_object()) {
+                for (const auto& k : secret_keys()) {
+                    if (sj.contains(k)) j[k] = sj[k];
+                }
+            }
+        }
+        return settings_from_json(j);
     } catch (const json::exception& e) {
         log_error(std::string("config.json nije ispravan: ") + e.what());
         return Settings{};
     }
 }
 
+bool config_has_secrets() {
+    const auto text = read_file(config_file());
+    if (!text) return false;
+    const json j = json::parse(*text, nullptr, false);
+    if (!j.is_object()) return false;
+    for (const auto& k : secret_keys()) {
+        if (j.contains(k) && j[k].is_string() && !j[k].get<std::string>().empty()) return true;
+    }
+    return false;
+}
+
+void save_secret_field(const std::string& key, const std::string& value) {
+    json secrets = json::object();
+    if (const auto text = read_file(secrets_file())) {
+        const json sj = json::parse(*text, nullptr, false);
+        if (sj.is_object()) secrets = sj;
+    }
+    secrets[key] = value;
+    create_private_dir(secrets_dir());
+    if (!no_reparse_points(secrets_dir())) throw std::runtime_error("Mapa tajni je spojnica – tajna nije spremljena");
+    write_file_atomic(secrets_file(), secrets.dump(2));
+}
+
 void save_settings(const Settings& s) {
     const fs::path path = config_file();
     std::error_code ec;
-    if (fs::exists(path)) fs::copy_file(path, fs::path(path) += L".bak", fs::copy_options::overwrite_existing, ec);
-    write_file_atomic(path, to_json(s).dump(2));
+    // prethodna verzija (bez tajni – i stari config.json iz 3.x/4.0.0 ih je imao)
+    if (const auto old = read_file(path)) {
+        const json oj = json::parse(*old, nullptr, false);
+        if (oj.is_object()) write_file_atomic(fs::path(path) += L".bak", strip_secrets(oj).dump(2));
+    }
+    json j = to_json(s);
+    json secrets = json::object();
+    for (const auto& k : secret_keys()) {
+        if (j.contains(k)) secrets[k] = j[k];
+    }
+    create_private_dir(secrets_dir());
+    if (!no_reparse_points(secrets_dir())) throw std::runtime_error("Mapa tajni je spojnica – postavke nisu spremljene");
+    write_file_atomic(secrets_file(), secrets.dump(2));
+    write_file_atomic(path, strip_secrets(std::move(j)).dump(2));
 }
 
 std::optional<Settings> legacy_settings() {

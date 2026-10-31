@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "api.hpp"
+#include "broker.hpp"
 #include "crypto.hpp"
 #include "secret.hpp"
 #include "tls.hpp"
@@ -33,6 +34,14 @@ Settings App::settings() const {
 // ---------------------------------------------------------------- životni ciklus
 int App::run() {
     ui_thread_ = GetCurrentThreadId();
+    {
+        std::error_code ec;
+        fs::create_directories(home_dir(), ec);
+        fs::create_directories(ui_dir(), ec);
+        // produkcija: instalacija daje Users samo čitanje mape (SMA-02) – izmjene idu kroz broker zadatka sustava
+        broker_mode_ = !server_role_ && !dir_writable(home_dir());
+        migrate_ui_files();
+    }
     log_open(logs_dir() / L"app.log");
     log_info(std::string("Solarni monitor ") + SOLARI_VERSION + " pokrenut");
     catalog_ = load_catalog(exe_dir() / L"web" / L"catalog.json");
@@ -42,9 +51,16 @@ int App::run() {
         return 1;
     }
     settings_ = load_settings();
+    data_.set_read_only(broker_mode_);
+    if (broker_mode_) {
+        log_info("Postavke se mijenjaju preko servisa (broker)");
+        const json st = broker({{"op", "state"}});
+        if (st.value("ok", false)) settings_ = settings_from_broker(st);
+        else log_error("Broker postavki: " + st.value("message", std::string()));
+    }
     wizard_ = !is_configured();
     set_language(wizard_ ? system_language() : settings_.language);
-    poller_.start();  // čeka postavke ako je ovo prvo pokretanje
+    if (!broker_mode_) poller_.start();  // čeka postavke ako je ovo prvo pokretanje; u produkciji bilježi zadatak sustava
     if (server_role_) {
         log_info("Solarni poslužitelj – postavke");
         update_api();
@@ -67,6 +83,9 @@ int App::run() {
             if (settings_window_ && !settings_window_->hwnd()) {
                 settings_window_.reset();
                 admin_logout();  // zatvoren prozor poslužitelja = odjava administratora
+                std::lock_guard lock(mutex_);
+                wipe(broker_pin_);
+                broker_pin_.clear();
             }
             if (!main_ && !settings_window_) PostQuitMessage(0);
             continue;
@@ -148,7 +167,18 @@ void App::update_remote() {
     if (want == remote_port()) return;
     remote_.reset();
     if (!want) return;
-    if (s.remote_view_key_enc.empty()) new_remote_view_key();  // 4.0: pregled iz mreže samo uz pristupni ključ
+    if (s.remote_view_key_enc.empty()) {  // 4.0: pregled iz mreže samo uz pristupni ključ
+        if (broker_mode_) {  // ključ izrađuje broker (operacija "state"); bez njega nema pregleda
+            const json st = broker({{"op", "state"}});
+            if (st.value("ok", false)) set_settings_from_broker(st);
+            if (settings().remote_view_key_enc.empty()) {
+                log_error("Pregled iz mreže: nema pristupnog ključa (broker nije dostupan)");
+                return;
+            }
+        } else {
+            new_remote_view_key();
+        }
+    }
     auto server = std::make_unique<HttpServer>(remote_view_handler([this] { return dashboard_json(*this); },
                                                                    [this] { return unprotect_secret(settings().remote_view_key_enc); }));
     if (server->start(want, true)) remote_ = std::move(server);
@@ -255,7 +285,13 @@ void App::open_settings(const std::string& panel) {
     settings_panel_ = panel;
     // poslužitelj: uvijek prijava administratora (ili izrada prvog); klijent: PIN ako je postavljen
     admin_logout();
-    settings_unlocked_ = !server_role_ && (wizard_ || settings().settings_pin_hash.empty());
+    {
+        std::lock_guard lock(mutex_);
+        wipe(broker_pin_);
+        broker_pin_.clear();
+    }
+    // u načinu brokera PIN vrijedi i u čarobnjaku (postavlja ga instalacija), jer svaka izmjena traži PIN
+    settings_unlocked_ = !server_role_ && ((wizard_ && !broker_mode_) || settings().settings_pin_hash.empty());
     WebViewCallbacks cb;
     cb.on_message = [this](const std::string& m) { on_message(WindowKind::Settings, m); };
     cb.on_closed = [this] { PostThreadMessageW(ui_thread_, kMsgCleanup, 0, 0); };
@@ -355,6 +391,16 @@ void App::admin_logout() {
 }
 
 json App::unlock(const std::string& pin) {
+    if (broker_mode_) {  // PIN provjerava broker (zaključavanje 15 min nakon 5 pogrešnih vodi on)
+        const json r = ipc_check_pin(pin);
+        if (!r.value("ok", false)) return {{"ok", false}, {"message", r.value("message", tr("Pogrešan PIN."))}};
+        {
+            std::lock_guard lock(mutex_);
+            broker_pin_ = pin;
+        }
+        settings_unlocked_ = true;
+        return {{"ok", true}, {"message", tr("Otključano.")}};
+    }
     constexpr int kMaxAttempts = 5, kLockoutS = 60;
     const std::time_t t = now();
     if (t < pin_locked_until_) {
@@ -373,7 +419,54 @@ json App::unlock(const std::string& pin) {
     return {{"ok", false}, {"message", tr("Pogrešan PIN.")}};
 }
 
+json App::ipc_check_pin(const std::string& pin) {
+    try {
+        return broker_call({{"op", "check_pin"}, {"pin", pin}});
+    } catch (const std::exception& e) {
+        log_error(std::string("Broker postavki: ") + e.what());
+        return {{"ok", false}, {"error", "service"}, {"message", tr("Servis Solarnog monitora nije pokrenut ili nije dostupan.")}};
+    }
+}
+
+json App::broker(json request) {
+    {
+        std::lock_guard lock(mutex_);
+        if (!broker_pin_.empty() && !request.contains("pin")) request["pin"] = broker_pin_;
+    }
+    try {
+        return broker_call(request);
+    } catch (const std::exception& e) {
+        log_error(std::string("Broker postavki: ") + e.what());
+        return {{"ok", false}, {"error", "service"}, {"message", tr("Servis Solarnog monitora nije pokrenut ili nije dostupan.")}};
+    }
+}
+
+Settings App::settings_from_broker(const json& state) {
+    json j = state.contains("settings") && state["settings"].is_object() ? state["settings"] : json::object();
+    if (state.contains("secrets") && state["secrets"].is_object()) {
+        for (const auto& [k, v] : state["secrets"].items()) j[k] = v;
+    }
+    Settings s = settings_from_json(j);
+    // samo oznake za obrazac (pin_set, smtp_password_set) – stvarni hash i lozinku ima samo broker
+    s.settings_pin_hash = state.value("pin_set", false) ? "broker" : "";
+    s.smtp_password_enc = state.value("smtp_password_set", false) ? "broker" : "";
+    return s;
+}
+
+void App::set_settings_from_broker(const json& state) {
+    const Settings s = settings_from_broker(state);
+    std::lock_guard lock(mutex_);
+    settings_ = s;
+}
+
 std::string App::new_remote_view_key() {
+    if (broker_mode_) {
+        const json st = broker({{"op", "remote_view_new_key"}});
+        if (!st.value("ok", false)) throw std::runtime_error(st.value("message", std::string("broker")));
+        set_settings_from_broker(st);
+        log_info("Pregled iz mreže: izrađen novi pristupni ključ (broker)");
+        return remote_view_key();
+    }
     // 128 bita slučajno (base32, 26 znakova); stari ključ odmah prestaje vrijediti
     Bytes raw = random_bytes(16);
     std::string key = base32(raw);
@@ -386,14 +479,18 @@ std::string App::new_remote_view_key() {
 std::string App::remote_view_key() const { return unprotect_secret(settings().remote_view_key_enc); }
 
 void App::update_settings(const std::function<void(Settings&)>& change) {
+    if (broker_mode_) throw std::logic_error("update_settings u načinu brokera");
     std::lock_guard lock(mutex_);
     change(settings_);
     save_settings(settings_);
 }
 
-void App::apply_settings(const Settings& s) {
+void App::apply_settings(const Settings& s, bool persist) {
     const Settings old = settings();
-    save_settings(s);
+    if (persist) {
+        if (broker_mode_) throw std::logic_error("apply_settings u načinu brokera");
+        save_settings(s);
+    }
     set_language(s.language);
     {
         std::lock_guard lock(mutex_);

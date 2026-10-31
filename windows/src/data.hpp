@@ -2,6 +2,7 @@
 // mjesečni i godišnji iznosi te rekordi. Sve se računa iz satnih agregata u SQL-u.
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -32,6 +33,8 @@ std::vector<DayKwh> days_from_aggregates(const std::vector<HourAggregate>& hours
 class DataService {
 public:
     explicit DataService(fs::path db_path) : db_path_(std::move(db_path)) {}
+    // 4.0 (SMA-02): sučelje u produkciji čita bazu bez prava upisa (piše samo zadatak sustava)
+    void set_read_only(bool on) { read_only_ = on; }
 
     // Sve što dashboardu treba u jednom JSON-u (web/dashboard.js).
     json dashboard(const Settings& s);
@@ -47,6 +50,7 @@ private:
     std::vector<DayKwh> daily(Db& db, Date start, Date end);
 
     fs::path db_path_;
+    std::atomic<bool> read_only_{false};
     std::mutex mutex_;
     json records_cache_;
     std::time_t records_at_ = 0;
