@@ -57,7 +57,7 @@ add_dependencies(SolarniServer runtime_files)
 
 # ---------------------------------------------------------------- testovi (doctest)
 enable_testing()
-add_executable(solari_tests tests/test_main.cpp)
+add_executable(solari_tests tests/test_main.cpp tests/test_security.cpp)
 target_link_libraries(solari_tests PRIVATE solari_core)
 target_link_options(solari_tests PRIVATE -static)
 target_compile_definitions(solari_tests PRIVATE SOLARI_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

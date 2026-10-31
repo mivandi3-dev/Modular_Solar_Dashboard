@@ -213,6 +213,14 @@ Settings settings_from_json(const json& j) {
     return s;
 }
 
+bool valid_host_name(const std::string& host) {
+    static const std::regex kIp(R"(^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$)");
+    static const std::regex kHost(R"(^[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9][A-Za-z0-9-]{0,62})*$)");
+    static const std::regex kDigitsDots(R"(^[\d.]+$)");
+    if (host.empty() || host.size() > 253) return false;
+    return std::regex_match(host, kIp) || (std::regex_match(host, kHost) && !std::regex_match(host, kDigitsDots));
+}
+
 bool is_configured() { return fs::exists(config_file()); }
 
 Settings load_settings() {
@@ -468,8 +476,7 @@ Validation validate_form(const json& form, const Settings& current, const std::v
     for (const auto& e : emails.value_or(std::vector<std::string>{})) s.alert_emails += (s.alert_emails.empty() ? "" : ", ") + e;
     if (!s.alert_emails.empty() && s.smtp_host.empty()) {
         errors["smtp_host"] = tr("Obavezno polje.");
-    } else if (!s.smtp_host.empty() && !std::regex_match(s.smtp_host, kIp) &&
-               (!std::regex_match(s.smtp_host, kHost) || std::regex_match(s.smtp_host, kDigitsDots))) {
+    } else if (!s.smtp_host.empty() && !valid_host_name(s.smtp_host)) {
         errors["smtp_host"] = tr("Upišite naziv ili IP adresu poslužitelja e-pošte.");
     }
     if (!s.smtp_from.empty() && !parse_recipients(s.smtp_from)) {

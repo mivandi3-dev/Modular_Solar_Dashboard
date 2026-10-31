@@ -1,6 +1,7 @@
 #include "util.hpp"
 
 #include <windows.h>
+#include <sddl.h>
 
 #include <cstdio>
 #include <fstream>
@@ -171,6 +172,22 @@ std::optional<std::string> read_file(const fs::path& path) {
     std::ostringstream ss;
     ss << in.rdbuf();
     return ss.str();
+}
+
+void write_private_file(const fs::path& path, std::string_view content) {
+    // Zaštićen DACL (ne nasljeđuje mapu): vlasnik, SYSTEM i administratori
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;FA;;;OW)(A;;FA;;;SY)(A;;FA;;;BA)", SDDL_REVISION_1, &sd, nullptr)) {
+        throw std::runtime_error("Zaštita datoteke nije uspjela");
+    }
+    SECURITY_ATTRIBUTES sa{sizeof sa, sd, FALSE};
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+    LocalFree(sd);
+    if (h == INVALID_HANDLE_VALUE) throw std::runtime_error("Datoteka se ne može zapisati: " + narrow(path.wstring()));
+    DWORD written = 0;
+    const BOOL ok = WriteFile(h, content.data(), static_cast<DWORD>(content.size()), &written, nullptr);
+    CloseHandle(h);
+    if (!ok || written != content.size()) throw std::runtime_error("Datoteka se ne može zapisati: " + narrow(path.wstring()));
 }
 
 void write_file_atomic(const fs::path& path, std::string_view content) {

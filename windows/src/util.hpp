@@ -59,5 +59,6 @@ std::time_t now();
 // ---------------------------------------------------------------- datoteke
 std::optional<std::string> read_file(const fs::path& path);
 void write_file_atomic(const fs::path& path, std::string_view content);  // privremena + zamjena
+void write_private_file(const fs::path& path, std::string_view content);  // nova datoteka (CREATE_NEW) samo za vlasnika, SYSTEM i administratore
 
 }  // namespace sm

@@ -54,6 +54,12 @@ class MailError : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 // Pošalji svim primateljima iz postavki; password nullopt = spremljena lozinka. Vraća primatelje.
+// Vrijednost u curl -K datoteci (u navodnicima). Kontrolni znak (novi red …) → MailError: inače postaje nova curl opcija.
+std::string curl_config_value(const std::string& v);
+// Cijela curl -K konfiguracija za slanje; provjerava i naziv poslužitelja
+std::string curl_mail_config(const Settings& s, const std::string& password, const std::string& sender,
+                             const std::vector<std::string>& recipients);
+
 std::vector<std::string> send_mail(const Settings& s, const std::string& subject, const std::string& body,
                                    const std::optional<std::string>& password = std::nullopt);
 

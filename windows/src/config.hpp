@@ -102,6 +102,7 @@ json to_json(const Settings& s, bool include_pin_hash = true);
 Settings settings_from_json(const json& j);  // nepoznata/neispravna polja → zadane vrijednosti
 
 bool is_configured();
+bool valid_host_name(const std::string& host);  // IPv4 ili naziv (bez razmaka, kontrolnih znakova, ':', '/')
 Settings load_settings();
 void save_settings(const Settings& s);  // atomično, prethodna verzija ostaje kao config.json.bak
 

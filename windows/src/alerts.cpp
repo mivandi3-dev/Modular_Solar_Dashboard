@@ -52,15 +52,6 @@ std::optional<std::time_t> parse_local(const std::string& text) {
     return t == -1 ? std::nullopt : std::optional(t);
 }
 
-std::string quote_config(const std::string& v) {  // vrijednost u curl -K datoteci
-    std::string out = "\"";
-    for (char c : v) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
-    }
-    return out + "\"";
-}
-
 std::string header_utf8(const std::string& text) {  // RFC 2047 za naslov s kvačicama
     return "=?UTF-8?B?" + base64(std::vector<uint8_t>(text.begin(), text.end())) + "?=";
 }
@@ -84,6 +75,28 @@ struct TempFiles {
 };
 
 }  // namespace
+
+std::string curl_config_value(const std::string& v) {
+    std::string out = "\"";
+    for (char c : v) {
+        const auto u = static_cast<unsigned char>(c);
+        if (u < 0x20 || u == 0x7F) throw MailError(tr("Postavke e-pošte sadrže nedopušten znak (novi red ili kontrolni znak)."));
+        if (c == '"' || c == '\\') out += '\\';
+        out += c;
+    }
+    return out + "\"";
+}
+
+std::string curl_mail_config(const Settings& s, const std::string& password, const std::string& sender,
+                             const std::vector<std::string>& recipients) {
+    if (!valid_host_name(s.smtp_host)) throw MailError(tr("Upišite naziv ili IP adresu poslužitelja e-pošte."));
+    const char* scheme = s.smtp_security == "ssl" ? "smtps" : "smtp";
+    std::string config = "url = " + curl_config_value(std::string(scheme) + "://" + s.smtp_host + ":" + std::to_string(s.smtp_port)) + "\n";
+    if (!s.smtp_user.empty()) config += "user = " + curl_config_value(s.smtp_user + ":" + password) + "\n";
+    config += "mail-from = " + curl_config_value(sender) + "\n";
+    for (const auto& r : recipients) config += "mail-rcpt = " + curl_config_value(r) + "\n";
+    return config;
+}
 
 bool wants_forecast(const Settings& s, const AlertState& state, std::time_t now) {
     const std::tm tm = local_tm(now);
@@ -207,6 +220,9 @@ std::vector<std::string> send_mail(const Settings& s, const std::string& subj, c
     if (!recipients) throw MailError(tr("Neispravna adresa e-pošte: {address}", {{"address", bad}}));
     if (recipients->empty() || s.smtp_host.empty()) throw MailError(tr("Upišite SMTP poslužitelj i barem jednu adresu primatelja."));
     const std::string sender = !s.smtp_from.empty() ? s.smtp_from : !s.smtp_user.empty() ? s.smtp_user : recipients->front();
+    // Provjera prije svega: config.json može biti ručno izmijenjen (novi red = nova curl opcija ili zaglavlje poruke)
+    const std::string config =
+        curl_mail_config(s, s.smtp_user.empty() ? std::string() : password.value_or(unprotect_secret(s.smtp_password_enc)), sender, *recipients);
 
     std::string to;
     for (const auto& r : *recipients) to += (to.empty() ? "" : ", ") + r;
@@ -225,17 +241,9 @@ std::vector<std::string> send_mail(const Settings& s, const std::string& subj, c
     TempFiles files;
     const fs::path eml = temp_file(L".eml"), cfg = temp_file(L".cfg");
     files.paths = {eml, cfg};
-    write_file_atomic(eml, message);
-    const char* scheme = s.smtp_security == "ssl" ? "smtps" : "smtp";
+    write_private_file(eml, message);
     // Korisnik i lozinka idu u privremenu datoteku (-K), ne u naredbeni redak koji vide drugi procesi.
-    std::string config = "url = " + quote_config(std::string(scheme) + "://" + s.smtp_host + ":" + std::to_string(s.smtp_port)) + "\n";
-    if (!s.smtp_user.empty()) {
-        const std::string pwd = password.value_or(unprotect_secret(s.smtp_password_enc));
-        config += "user = " + quote_config(s.smtp_user + ":" + pwd) + "\n";
-    }
-    config += "mail-from = " + quote_config(sender) + "\n";
-    for (const auto& r : *recipients) config += "mail-rcpt = " + quote_config(r) + "\n";
-    write_file_atomic(cfg, config);
+    write_private_file(cfg, config);
 
     std::wstring cmd = curl_command() + L" --silent --show-error --max-time 40 ";
     if (s.smtp_security == "starttls") cmd += L"--ssl-reqd ";
