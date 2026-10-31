@@ -1,0 +1,65 @@
+// Web suÄelje (dashboard, widgeti, editor, prijevodi) kopira se iz verzija2/web pri svakoj izgradnji;
+// Android dodaje svoj most (android/web/android-bridge.js) i stranicu postavki.
+plugins {
+    id "com.android.application"
+}
+
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file("keystore.properties")
+if (keystoreFile.exists()) keystoreFile.withInputStream { keystoreProps.load(it) }
+
+def webAssets = layout.buildDirectory.dir("generated/webassets")
+
+android {
+    namespace "hr.ivandic.solarnimonitor"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "hr.ivandic.solarnimonitor"
+        minSdk 26
+        targetSdk 36
+        versionCode 330
+        versionName "3.3.0"
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile.exists()) {
+                storeFile rootProject.file(keystoreProps["storeFile"])
+                storePassword keystoreProps["storePassword"]
+                keyAlias keystoreProps["keyAlias"]
+                keyPassword keystoreProps["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.assets.srcDirs += webAssets
+    }
+}
+
+def copyWeb = tasks.register("copyWeb", Sync) {
+    from(rootProject.file("../windows/web")) {
+        exclude "settings.html", "settings.js", "settings.css", "bridge.js"
+        into "web"
+    }
+    from(rootProject.file("../windows/web")) {
+        include "settings.css"
+        into "web"
+    }
+    from(rootProject.file("web")) { into "web" }
+    into webAssets
+}
+tasks.named("preBuild") { dependsOn copyWeb }

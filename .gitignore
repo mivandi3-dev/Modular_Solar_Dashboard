@@ -1,0 +1,32 @@
+# izgradnja
+windows/build/
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+deploy/
+
+# ključ za potpisivanje APK-a – nikad u repozitorij
+android/keystore/
+android/keystore.properties
+*.jks
+*.keystore
+
+# biblioteke koje preuzima windows/third_party/fetch.ps1
+windows/third_party/sqlite/
+windows/third_party/nlohmann/
+windows/third_party/doctest/
+windows/third_party/webview2/
+windows/web/vendor/plotly-basic.min.js
+
+# podaci i tajne
+*.db
+*.db-wal
+*.db-shm
+.env
+*.log
+
+# curl.exe i licenca – preuzima windows/third_party/fetch.ps1 (SHA-256)
+windows/third_party/curl/
+# izlazi gradnje 4.0 izvan izvora
+/build/

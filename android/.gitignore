@@ -1,0 +1,7 @@
+# lokalno ? ne dijeliti
+keystore/
+keystore.properties
+.gradle/
+build/
+app/build/
+local.properties

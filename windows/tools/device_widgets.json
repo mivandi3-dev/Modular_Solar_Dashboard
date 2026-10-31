@@ -1,0 +1,89 @@
+{
+ "category": "Uređaj",
+ "widgets": [
+  {
+   "key": "battery",
+   "title": "Baterija",
+   "description": "Napunjenost, snaga punjenja ili pražnjenja i napon baterije (hibridni i otočni izmjenjivači, Victron, Huawei LUNA).",
+   "icon": "🔋",
+   "size": [
+    3,
+    2
+   ],
+   "minSize": [
+    3,
+    2
+   ],
+   "maxSize": [
+    6,
+    3
+   ],
+   "needsMeter": false,
+   "needs": "battery",
+   "options": []
+  },
+  {
+   "key": "inverter_temp",
+   "title": "Temperatura invertera",
+   "description": "Unutarnja temperatura invertera s upozorenjem kad je povišena.",
+   "icon": "🌡️",
+   "size": [
+    3,
+    1
+   ],
+   "minSize": [
+    2,
+    1
+   ],
+   "maxSize": [
+    6,
+    2
+   ],
+   "needsMeter": false,
+   "needs": "temperature",
+   "options": []
+  },
+  {
+   "key": "grid_quality",
+   "title": "Mreža",
+   "description": "Napon i frekvencija mreže i jesu li u uobičajenim granicama.",
+   "icon": "🔌",
+   "size": [
+    3,
+    1
+   ],
+   "minSize": [
+    3,
+    1
+   ],
+   "maxSize": [
+    6,
+    2
+   ],
+   "needsMeter": false,
+   "needs": "grid",
+   "options": []
+  },
+  {
+   "key": "offgrid",
+   "title": "Otočni sustav",
+   "description": "Potrošnja na izlazu izmjenjivača, izlazni napon i frekvencija, opterećenje i napon baterije (12/24/48 V).",
+   "icon": "🏝️",
+   "size": [
+    3,
+    2
+   ],
+   "minSize": [
+    3,
+    2
+   ],
+   "maxSize": [
+    6,
+    3
+   ],
+   "needsMeter": false,
+   "needs": "offgrid",
+   "options": []
+  }
+ ]
+}

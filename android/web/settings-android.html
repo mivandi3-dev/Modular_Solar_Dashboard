@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="hr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solarni monitor – postavke</title>
+<link rel="stylesheet" href="settings.css">
+<style>
+  body { overflow-y: auto; }
+  .android { max-width: 980px; margin: 0 auto; padding: 22px 18px 110px; }
+  .android header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .android header .sun { width: 30px; height: 30px; }
+  .android .fields { grid-template-columns: repeat(2, 1fr); }
+  .android .bar { position: fixed; left: 0; right: 0; bottom: 0; justify-content: flex-end; }
+  #source[data-mode="cloud"] .local-url, #source[data-mode="local"] .cloud-url { display: none; }
+  #source[data-mode="demo"] .fields, #source[data-mode="demo"] .test { display: none; }
+  .account:empty { display: none; }
+  .account { line-height: 1.45; }
+  .account code { font-size: .72em; word-break: break-all; }
+  [hidden].login, [hidden].logout { display: none !important; }
+  .totp[hidden], .recovery[hidden], .totp-setup[hidden] { display: none; }
+  .newpw { padding: 12px 14px; border: 1px solid #F59E0B; border-radius: 12px; background: rgba(245,158,11,.08); }
+  .newpw[hidden] { display: none; }
+  .totp-setup { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; margin: 6px 0 12px; }
+  .totp .qr { width: 200px; height: 200px; background: #fff; border-radius: 12px; padding: 8px; }
+  .totp .qr svg { width: 100%; height: 100%; display: block; }
+  .totp .secret { word-break: break-all; font-size: .95rem; }
+  .totp-code { font: 700 1.4rem monospace; letter-spacing: .2em; text-align: center; }
+  .recovery { padding: 14px; border: 1px solid #F59E0B; border-radius: 12px; background: rgba(245,158,11,.08); }
+  .recovery .codes { font: 600 1rem monospace; columns: 2; user-select: all; }
+  .demo-start { width: 100%; margin-top: 14px; }
+  /* poruke (provjera veze, spremanje, izvještaj) prelamaju se u novi red – i duge adrese tunela */
+  .android .test, .android ~ .bar, .android .report-bar { flex-wrap: wrap; }
+  .android .test .result, .android ~ .bar .result { flex: 1 1 220px; min-width: 0; }
+  .android .result, .android .err, .android small { overflow-wrap: anywhere; }
+  .android input, .android select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .android ~ .bar { padding: 12px 18px; }
+  @media (max-width: 640px) { .android .fields, .choices.two, .choices.three { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="android">
+  <header><span class="sun" aria-hidden="true"></span><div><h1>Postavke</h1><small class="muted" id="version"></small></div></header>
+
+  <fieldset class="glass card" id="source" data-mode="cloud">
+    <legend>Solarni poslužitelj</legend>
+    <div class="choices three" role="radiogroup" aria-label="Način spajanja">
+      <label class="choice"><input type="radio" name="mode" value="cloud" checked><b>Cloudflare tunel</b><small>s bilo kojeg mjesta preko interneta (https)</small></label>
+      <label class="choice"><input type="radio" name="mode" value="local"><b>Lokalna mreža</b><small>isti Wi-Fi kao poslužitelj (https://IP:8700)</small></label>
+      <label class="choice"><input type="radio" name="mode" value="demo"><b>Primjer podataka</b><small>razgledavanje bez poslužitelja (izmišljena elektrana)</small></label>
+    </div>
+    <div class="fields" style="margin-top:14px">
+      <label class="cloud-url">Adresa tunela<input data-field="cloud_url" placeholder="https://solar.tvrtka.hr" inputmode="url" autocapitalize="off"><span class="err" data-error="cloud_url"></span></label>
+      <label class="local-url">Adresa u lokalnoj mreži<input data-field="local_url" placeholder="https://192.168.1.20:8700" inputmode="url" autocapitalize="off"><span class="err" data-error="local_url"></span></label>
+      <div class="account" id="account"></div>
+      <label class="login">E-pošta<input id="email" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email"></label>
+      <label class="login">Lozinka<input id="password" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false"><small>ne sprema se – aplikacija čuva samo šifriranu oznaku prijave</small></label>
+      <span class="err" data-error="login"></span>
+      <div class="newpw" id="newpw" hidden>
+        <p class="small"><b>Prva prijava:</b> ovo je početna lozinka. Upišite svoju novu lozinku – najmanje 10 znakova i barem tri vrste
+          znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.</p>
+        <label>Nova lozinka<input class="np1" type="password" autocomplete="new-password" autocapitalize="off"></label>
+        <label>Ponovite novu lozinku<input class="np2" type="password" autocomplete="new-password" autocapitalize="off"></label>
+      </div>
+      <div class="totp" id="totp" hidden>
+        <div class="totp-setup">
+          <button type="button" class="btn primary" data-action="open-auth">Otvori u aplikaciji autentifikatoru</button>
+          <p class="small muted">ili QR kod skenirajte drugim uređajem, odnosno u aplikaciji ručno upišite ključ:</p>
+          <div class="qr" aria-label="QR kod za aplikaciju autentifikator"></div>
+          <code class="secret"></code>
+        </div>
+        <label>Kod iz aplikacije autentifikatora (ili kod za oporavak)<input class="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" spellcheck="false"></label>
+      </div>
+      <div class="recovery" id="recovery" hidden>
+        <p><b>Dvofaktorska prijava je uključena.</b> Spremite ove jednokratne kodove za oporavak na sigurno mjesto – vrijede
+          ako izgubite mobitel. Prikazuju se samo sada.</p>
+        <pre class="codes"></pre>
+        <button type="button" class="btn primary" data-action="recovery-done">Spremio sam kodove – nastavi</button>
+      </div>
+    </div>
+    <button class="btn demo-start" data-action="demo" id="demo-start">▶ Isprobaj s primjerom podataka</button>
+    <div class="test">
+      <button class="btn primary login" data-action="login">Prijava</button>
+      <button class="btn logout" data-action="logout">Odjava</button>
+      <p class="result" id="test-result" role="status"></p>
+    </div>
+  </fieldset>
+
+  <fieldset class="glass card">
+    <legend>Prikaz</legend>
+    <div class="fields">
+      <label>Jezik prikaza i postavki<select data-field="language" class="language-select"></select></label>
+    </div>
+    <p class="muted small" style="margin:14px 0 8px">Tema</p>
+    <div class="choices palettes" role="radiogroup" aria-label="Tema">
+      <label class="choice palette" data-palette="dark"><input type="radio" name="palette" value="dark"><span class="swatch"></span><b>Tamna</b><small>zadane tamne boje</small></label>
+      <label class="choice palette" data-palette="light"><input type="radio" name="palette" value="light"><span class="swatch"></span><b>Svijetla</b><small>zadane svijetle boje</small></label>
+      <label class="choice palette" data-palette="ocean"><input type="radio" name="palette" value="ocean"><span class="swatch"></span><b>Ocean</b><small>tirkizna i plava</small></label>
+      <label class="choice palette" data-palette="forest"><input type="radio" name="palette" value="forest"><span class="swatch"></span><b>Šuma</b><small>zelena</small></label>
+      <label class="choice palette" data-palette="sunset"><input type="radio" name="palette" value="sunset"><span class="swatch"></span><b>Zalazak</b><small>ružičasta i zlatna</small></label>
+      <label class="choice palette" data-palette="midnight"><input type="radio" name="palette" value="midnight"><span class="swatch"></span><b>Ponoć</b><small>ljubičasta i plava</small></label>
+      <label class="choice palette" data-palette="graphite"><input type="radio" name="palette" value="graphite"><span class="swatch"></span><b>Grafit</b><small>siva i žuta</small></label>
+      <label class="choice palette" data-palette="contrast"><input type="radio" name="palette" value="contrast"><span class="swatch"></span><b>Visoki kontrast</b><small>najbolja čitljivost</small></label>
+      <label class="choice palette" data-palette="paper"><input type="radio" name="palette" value="paper"><span class="swatch"></span><b>Papir</b><small>topla svijetla</small></label>
+      <label class="choice palette" data-palette="sky"><input type="radio" name="palette" value="sky"><span class="swatch"></span><b>Nebo</b><small>svijetloplava</small></label>
+      <label class="choice palette" data-palette="sand"><input type="radio" name="palette" value="sand"><span class="swatch"></span><b>Pijesak</b><small>bež i narančasta</small></label>
+    </div>
+    <label class="toggle" style="margin-top:14px"><input type="checkbox" data-field="start_fullscreen"><span></span>Pokreni preko cijelog zaslona</label>
+    <label class="toggle"><input type="checkbox" data-field="keep_on"><span></span>Ne gasi zaslon dok je aplikacija otvorena</label>
+  </fieldset>
+
+
+  <fieldset class="glass card">
+    <legend>Vremenska prognoza</legend>
+    <div class="choices three" role="radiogroup" aria-label="Broj dana prognoze">
+      <label class="choice"><input type="radio" name="forecast_days" value="2"><b>2 dana</b><small>sutra i prekosutra</small></label>
+      <label class="choice"><input type="radio" name="forecast_days" value="3"><b>3 dana</b><small>sljedeća tri dana</small></label>
+      <label class="choice"><input type="radio" name="forecast_days" value="5" checked><b>5 dana</b><small>sljedećih pet dana</small></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="glass card">
+    <legend>Noćni način</legend>
+    <div class="choices three" role="radiogroup" aria-label="Noćni način">
+      <label class="choice"><input type="radio" name="night_mode" value="off"><b>Isključen</b><small>prikaz radi cijelu noć</small></label>
+      <label class="choice"><input type="radio" name="night_mode" value="dim"><b>Zatamnjen prikaz</b><small>crni zaslon s malim satom</small></label>
+      <label class="choice"><input type="radio" name="night_mode" value="screen_off"><b>Ugašen zaslon</b><small>najmanja svjetlina i crni prikaz</small></label>
+    </div>
+    <div class="fields night-times">
+      <label>Od<input type="time" data-field="night_from"><span class="err" data-error="night_from"></span></label>
+      <label>Do<input type="time" data-field="night_to"><span class="err" data-error="night_to"></span></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="glass card no-print">
+    <legend>Izvještaji</legend>
+    <div class="report-bar">
+      <select id="report-month" aria-label="Mjesec"></select>
+      <button class="btn primary" data-action="report-show">Prikaži</button>
+      <button class="btn" data-action="report-print" id="report-print" disabled>🖨 Ispis / PDF</button>
+      <button class="btn" data-action="report-csv" id="report-csv" disabled>⬇ Excel (CSV)</button>
+    </div>
+    <p class="result" id="report-result" role="status"></p>
+  </fieldset>
+  <article id="report" class="report" hidden></article>
+</main>
+
+<footer class="bar">
+  <p class="result" id="save-result" role="status"></p>
+  <button class="btn" data-action="back" id="btn-back">← Natrag</button>
+  <button class="btn primary" data-action="save">Spremi</button>
+</footer>
+
+<script src="i18n.js"></script>
+<script src="report.js"></script>
+<script src="demo.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="themes.js"></script>
+<script src="colors.js"></script>
+<script src="settings-android.js"></script>
+</body>
+</html>

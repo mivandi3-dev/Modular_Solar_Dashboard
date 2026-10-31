@@ -1,0 +1,33 @@
+#include <winver.h>
+
+1 ICON "app.ico"
+#ifdef SOLARI_DEV_NO_UAC
+1 24 "app.manifest"  // samo razvojna izgradnja (build-dev) za automatske testove – nikad u Setupu
+#else
+1 24 "server.manifest"  // 3.0: korisnici i ključevi – samo administrator (UAC)
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 3,3,0,0
+PRODUCTVERSION 3,3,0,0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041a04b0"
+    BEGIN
+      VALUE "CompanyName", "Marko Ivandić"
+      VALUE "LegalCopyright", "© 2026 Marko Ivandić"
+      VALUE "FileDescription", "Solarni poslužitelj"
+      VALUE "FileVersion", "3.3.0"
+      VALUE "ProductName", "Solarni poslužitelj"
+      VALUE "ProductVersion", "3.3.0"
+      VALUE "OriginalFilename", "SolarniServer.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x041a, 1200
+  END
+END
