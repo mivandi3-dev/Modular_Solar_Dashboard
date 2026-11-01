@@ -2,6 +2,8 @@
 <html lang="hr">
 <head>
 <meta charset="utf-8">
+  <!-- 5.0.1 (audit W-06): samo vlastite skripte, bez vanjskih veza -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://data.solari https://app.solari data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Solarni monitor</title>
 <link id="theme-css" rel="stylesheet" href="dashboard-dark.css">
 <link rel="stylesheet" href="devices.css">
