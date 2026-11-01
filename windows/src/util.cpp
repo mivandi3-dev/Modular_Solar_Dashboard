@@ -208,7 +208,9 @@ void log_open(const fs::path& file) {
     std::error_code ec;
     fs::create_directories(file.parent_path(), ec);
     // SMA-02: zapis se ne piše kroz spojnicu/simboličku vezu (proces SYSTEM bi pisao u tuđu mapu)
-    g_log_file = no_reparse_points(file.parent_path()) ? file : fs::path();
+    // 5.0.2: zapisnik sučelja je u %LOCALAPPDATA% (izvan mape podataka) – tamo vrijedi korisnikova mapa; unutar mape podataka
+    // (procesi SYSTEM) i dalje bez veza
+    g_log_file = ui_write_allowed(file.parent_path()) ? file : fs::path();
 }
 
 void log(Level level, std::string_view message) {

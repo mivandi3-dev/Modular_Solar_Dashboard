@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "Las nuevas contraseñas no coinciden.",
   "Poslužitelj je vratio grešku.": "El servidor devolvió un error.",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Arrastre un widget a la pantalla o haga clic en <b>+</b>. Mueva un widget arrastrándolo, cambie su tamaño con la esquina inferior derecha, ⚙ son las opciones y ✕ lo quita. En pantalla completa (F11 / Alt + Enter) el menú está oculto.",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter o doble clic"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter o doble clic",
+  "Raspored je zaključan": "El diseño está bloqueado",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "Introduzca el PIN de configuración para cambiar el diseño. Permanece desbloqueado 10 minutos.",
+  "PIN postavki": "PIN de configuración",
+  "Raspored nije promijenjen.": "El diseño no se ha cambiado.",
+  "Raspored je zaključan – upišite PIN postavki.": "El diseño está bloqueado: introduzca el PIN de configuración.",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "La carpeta del diseño es una unión o un enlace simbólico: el diseño no se ha guardado."
  }
 }

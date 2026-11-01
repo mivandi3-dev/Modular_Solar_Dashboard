@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "Yeni parolalar eşleşmiyor.",
   "Poslužitelj je vratio grešku.": "Sunucu bir hata döndürdü.",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Bir widget'ı ekrana sürükleyin veya <b>+</b> düğmesine tıklayın. Ekrandaki widget'ı sürükleyerek taşıyın, boyutunu sağ alt köşeden değiştirin, ⚙ seçeneklerdir, ✕ kaldırır. Tam ekranda (F11 / Alt + Enter) menü gizlenir.",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter veya çift tıklama"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter veya çift tıklama",
+  "Raspored je zaključan": "Yerleşim kilitli",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "Yerleşimi değiştirmek için ayarlar PIN'ini girin. Kilit 10 dakika açık kalır.",
+  "PIN postavki": "Ayarlar PIN'i",
+  "Raspored nije promijenjen.": "Yerleşim değiştirilmedi.",
+  "Raspored je zaključan – upišite PIN postavki.": "Yerleşim kilitli – ayarlar PIN'ini girin.",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "Yerleşim klasörü bir bağlantı noktası veya sembolik bağlantı – yerleşim kaydedilmedi."
  }
 }

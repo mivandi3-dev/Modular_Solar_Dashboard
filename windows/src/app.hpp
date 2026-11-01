@@ -47,6 +47,10 @@ public:
     // PIN za postavke (vrijedi dok je prozor postavki otvoren)
     bool settings_unlocked() const { return settings_unlocked_; }
     json unlock(const std::string& pin);
+    // 5.0.2 (audit W-02): raspored na javnom zaslonu mijenja se samo uz PIN postavki (otključano kLayoutUnlockS sekundi)
+    static constexpr std::time_t kLayoutUnlockS = 10 * 60;
+    json unlock_layout(const std::string& pin);
+    bool layout_unlocked() const;
 
     // ------------------------------------------------ samo u GUI niti
     void toggle_fullscreen();
@@ -111,6 +115,8 @@ private:
     std::string broker_pin_;  // pod mutex_; samo dok je prozor postavki otključan
     std::unique_ptr<WebViewWindow> main_, settings_window_;
     std::atomic<bool> fullscreen_{false}, sidebar_open_{true}, wizard_{false}, settings_unlocked_{false};
+    std::atomic<std::time_t> layout_unlocked_until_{0};
+    json verify_pin(const std::string& pin, bool remember_for_broker);  // zajednička provjera PIN-a (broker ili lokalno)
     std::string settings_panel_;
     int pin_failures_ = 0;
     std::time_t pin_locked_until_ = 0;

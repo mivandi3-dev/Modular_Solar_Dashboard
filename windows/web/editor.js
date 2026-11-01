@@ -99,7 +99,21 @@
     #se-pop .row { display: flex; justify-content: flex-end; gap: 8px; }
     #se-pop button { font: 700 12.5px 'Plus Jakarta Sans', sans-serif; border-radius: 9px; padding: 8px 12px; cursor: pointer;
       border: 1px solid var(--line, rgba(255,255,255,.12)); background: transparent; color: inherit; }
-    #se-pop button.primary { background: #71BF43; border-color: #71BF43; color: #0B1120; }`;
+    #se-pop button.primary { background: #71BF43; border-color: #71BF43; color: #0B1120; }
+    #se-lock { position: fixed; inset: 0; z-index: 1000000; display: flex; align-items: center; justify-content: center;
+      background: rgba(5,10,20,.62); font: 14px 'Plus Jakarta Sans', 'Segoe UI', sans-serif; color: var(--text, #E6EAF2); }
+    #se-lock[hidden] { display: none; }
+    #se-lock .box { width: min(380px, 92vw); background: var(--card-solid, #1A2540); border: 1px solid var(--border, rgba(255,255,255,.1));
+      border-radius: 18px; padding: 20px 22px; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+    #se-lock h3 { margin: 0 0 6px; font-size: 17px; } #se-lock p { margin: 0 0 14px; color: var(--muted, #94A3B8); font-size: 13px; line-height: 1.45; }
+    #se-lock input { width: 100%; box-sizing: border-box; font: 700 20px 'Plus Jakarta Sans', sans-serif; letter-spacing: .3em; text-align: center;
+      color: inherit; background: rgba(0,0,0,.22); border: 1px solid var(--line, rgba(255,255,255,.14)); border-radius: 11px; padding: 10px; outline: none; }
+    #se-lock input:focus { border-color: #71BF43; }
+    #se-lock .msg { min-height: 18px; margin: 8px 0 4px; color: #F87171; font-size: 12.5px; }
+    #se-lock .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    #se-lock button { font: 700 13px 'Plus Jakarta Sans', sans-serif; border-radius: 10px; padding: 9px 14px; cursor: pointer;
+      border: 1px solid var(--line, rgba(255,255,255,.14)); background: transparent; color: inherit; }
+    #se-lock button.primary { background: #71BF43; border-color: #71BF43; color: #0B1120; }`;
   document.head.appendChild(css);
 
   // ------------------------------------------------------------ elementi
@@ -138,6 +152,46 @@
   document.body.appendChild(pop);
 
   const status = (msg, cls = "") => { const el = side.querySelector("#se-status"); el.textContent = msg; el.className = cls; };
+
+  // ------------------------------------------------------------ 5.0.2 (audit W-02): raspored se mijenja samo uz PIN postavki
+  const lock = document.createElement("div");
+  lock.id = "se-lock";
+  lock.hidden = true;
+  lock.innerHTML = `<form class="box" autocomplete="off"><h3>${esc(T("Raspored je zaključan"))}</h3>
+    <p>${esc(T("Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta."))}</p>
+    <input type="password" inputmode="numeric" maxlength="8" aria-label="${esc(T("PIN postavki"))}">
+    <div class="msg" role="alert"></div>
+    <div class="row"><button type="button" data-lock="cancel">${esc(T("Odustani"))}</button>
+      <button type="submit" class="primary">${esc(T("Otključaj"))}</button></div></form>`;
+  document.body.appendChild(lock);
+  let lockWait = null;
+  function askPin() {
+    if (lockWait) return lockWait;
+    lockWait = new Promise((resolve) => {
+      const input = lock.querySelector("input"), msg = lock.querySelector(".msg"), form = lock.querySelector("form");
+      const done = (ok) => { lock.hidden = true; input.value = ""; msg.textContent = ""; form.onsubmit = null; lockWait = null; resolve(ok); };
+      lock.querySelector("[data-lock=cancel]").onclick = () => done(false);
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const r = await api().unlock_layout(input.value);
+        if (r && r.ok) { done(true); return; }
+        msg.textContent = (r && r.message) || T("Pogrešan PIN.");
+        input.select();
+      };
+      lock.hidden = false;
+      setTimeout(() => input.focus(), 30);
+    });
+    return lockWait;
+  }
+  // poziv mosta koji mijenja raspored: zaključan raspored → PIN, pa isti poziv još jednom
+  async function guarded(call) {
+    let res = await call();
+    if (res && res.error === "layout_locked") {
+      if (!(await askPin())) return { ok: false, message: T("Raspored nije promijenjen.") };
+      res = await call();
+    }
+    return res;
+  }
   const spec = (type) => ed.catalog.find((c) => c.key === type);
 
   // ------------------------------------------------------------ mreža
@@ -198,7 +252,7 @@
     setTimeout(renderFrames, 300);
   }
   async function addPage() {
-    const res = await api().save_layout([], ed.pages.length);
+    const res = await guarded(() => api().save_layout([], ed.pages.length));
     if (!res.ok) { status(res.message, "err"); return; }
     ed.pages = [...ed.pages, res.layout];
     selectPage(ed.pages.length - 1);
@@ -207,7 +261,7 @@
   }
   async function removePage() {
     if (!confirmRemove) { confirmRemove = true; renderPages(); return; }
-    const res = await api().remove_page(ed.page);
+    const res = await guarded(() => api().remove_page(ed.page));
     if (!res.ok) { status(res.message, "err"); return; }
     undo = [];
     ed.pages = res.pages;
@@ -216,7 +270,7 @@
     refreshDashboard();
   }
   async function setRotation(seconds) {
-    const res = await api().set_rotation(seconds);
+    const res = await guarded(() => api().set_rotation(seconds));
     if (!res.ok) { status(res.message, "err"); return; }
     ed.rotateS = seconds;
     status(T("Izmjena stranica: {when}", { when: rotateLabel(seconds) }), "ok");
@@ -276,7 +330,7 @@
     ed.layout = next; // odmah prikaži, provjera i spremanje u pozadini
     renderFrames();
     renderList(side.querySelector("input[type=search]").value);
-    const res = await api().save_layout(next, page);
+    const res = await guarded(() => api().save_layout(next, page));
     if (!res.ok) {
       ed.layout = prev;
       renderFrames();
@@ -418,7 +472,8 @@
       close: () => setOpen(false),
       undo: doUndo,
       reset: async () => {
-        const res = await api().reset_layout();
+        const res = await guarded(() => api().reset_layout());
+        if (res.ok === false) { status(res.message, "err"); return; }
         undo = [];
         ed.pages = res.pages;
         ed.rotateS = res.rotateS;
@@ -436,7 +491,7 @@
   async function doUndo() {
     const prev = undo.pop();
     if (!prev) { status(T("Nema promjena za poništiti.")); return; }
-    const res = await api().save_layout(prev.layout, prev.page);
+    const res = await guarded(() => api().save_layout(prev.layout, prev.page));
     if (res.ok) {
       ed.pages[prev.page] = res.layout;
       selectPage(prev.page);

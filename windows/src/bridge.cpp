@@ -776,6 +776,14 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     if (kind == WindowKind::Main && settings_only_method(method)) throw std::runtime_error("Metoda nije dostupna u ovom prozoru: " + method);
 
     // ---- glavni prozor
+    // 5.0.2 (audit W-02): izmjene rasporeda (i teksta widgeta „poruka”) na javnom zaslonu samo uz PIN postavki
+    static const std::set<std::string> kLayoutChanges = {"save_layout", "remove_page", "set_rotation", "reset_layout"};
+    if (kind == WindowKind::Main && kLayoutChanges.count(method) && !app.layout_unlocked()) {
+        return reply(json{{"ok", false}, {"error", "layout_locked"},
+                          {"message", tr("Raspored je zaključan – upišite PIN postavki.")}});
+    }
+    if (method == "unlock_layout") return reply(app.unlock_layout(arg_string(args, 0)));
+    if (method == "layout_state") return reply(json{{"unlocked", app.layout_unlocked()}});
     if (method == "get_dashboard") return async([&app] { return dashboard_json(app); });
     if (method == "get_editor") return reply(get_editor(app));
     if (method == "save_layout") return reply(save_layout_call(app, args.empty() ? json::array() : args[0], arg_int(args, 1)));

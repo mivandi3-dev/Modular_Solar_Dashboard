@@ -62,8 +62,23 @@ try:
     time.sleep(5)
     st = cdp.js(main, "window.pywebview.api.get_dashboard().then(d => d.plant ? d.plant.name || '' : JSON.stringify(Object.keys(d)).slice(0,80))")
     check("gui", "dashboard se učitava (baza samo za čitanje + postavke iz brokera)", st is not None and "EXCEPTION" not in str(st), st)
-    log = (HOME / "ui" / "logs" / "app.log").read_text(encoding="utf-8", errors="replace") if (HOME / "ui" / "logs" / "app.log").exists() else ""
-    check("broker", "sučelje radi u načinu brokera (zapis u ui\\logs\\app.log)", "broker" in log, log[-300:])
+    # 5.0.2 (audit W-05): zapisnik sučelja je u mapi korisnika (%LOCALAPPDATA%\<ime mape podataka>\logs), ne u zajedničkoj ui\
+    app_log = Path(os.environ["LOCALAPPDATA"]) / HOME.name / "logs" / "app.log"
+    log = app_log.read_text(encoding="utf-8", errors="replace") if app_log.exists() else ""
+    check("broker", "sučelje radi u načinu brokera (zapis u %LOCALAPPDATA%\\...\\logs\\app.log)", "broker" in log, log[-300:])
+    check("w05", "zapisnik sučelja nije u zajedničkoj mapi ui", not (HOME / "ui" / "logs" / "app.log").exists())
+
+    # ---- 5.0.2 (audit W-02): raspored na javnom zaslonu mijenja se samo uz PIN postavki
+    r = cdp.js(main, "window.pywebview.api.reset_layout().then(r => JSON.stringify(r))")
+    check("w02", "bez PIN-a: izmjena rasporeda odbijena (layout_locked)", '"layout_locked"' in str(r), r)
+    r = cdp.js(main, "window.pywebview.api.save_layout([], 0).then(r => JSON.stringify(r))")
+    check("w02", "bez PIN-a: spremanje rasporeda odbijeno", '"layout_locked"' in str(r), r)
+    r = cdp.js(main, "window.pywebview.api.unlock_layout('0000').then(r => JSON.stringify(r))")
+    check("w02", "pogrešan PIN ne otključava raspored", '"ok":false' in str(r), r)
+    r = cdp.js(main, f"window.pywebview.api.unlock_layout('{PIN}').then(r => JSON.stringify(r))")
+    check("w02", "točan PIN otključava raspored", '"ok":true' in str(r), r)
+    r = cdp.js(main, "window.pywebview.api.reset_layout().then(r => JSON.stringify(r))")
+    check("w02", "nakon PIN-a izmjena rasporeda prolazi", '"pages"' in str(r) and "layout_locked" not in str(r), r)
 
     # ---- WebView2 (SMA-05/06, WT-10)
     before = {t["id"] for t in cdp.targets()}

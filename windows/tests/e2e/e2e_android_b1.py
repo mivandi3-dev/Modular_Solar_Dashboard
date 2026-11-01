@@ -21,6 +21,7 @@ SERVER = r"C:\Modularnisolarnidashboard40\build\windows-dev\SolarniServer.exe"
 HOME = Path(os.environ["TEMP"]) / "sm40_e2e_android_b1"
 GATEWAY = r"C:\Modularnisolarnidashboard40\source\gateway\target\debug\solari-gateway.exe"
 PORT = 8794
+USER_PW = "Ana-Pocetna-Lozinka-2026"
 OUT = Path(r"C:\Modularnisolarnidashboard40\reports")
 
 if HOME.exists():
@@ -31,7 +32,9 @@ shutil.copy(os.environ.get("SOLARI_E2E_DB", str(SP / "home_features" / "data" / 
                                               "server_lan": True, "server_gateway": True, "language": "hr"}), encoding="utf-8")
 SID = subprocess.check_output(["powershell", "-NoProfile", "-Command", "([System.Security.Principal.WindowsIdentity]::GetCurrent()).User.Value"], text=True).strip()
 PIPE = '\\\\.\\pipe\\SolariE2EAndroid.' + str(os.getpid())
-env = {**os.environ, "SOLARI2_HOME": str(HOME), "SOLARI_DEV_GATEWAY_SID": SID, "SOLARI_DEV_API_PIPE": PIPE}
+# zaseban mutex servisa: na računalu može raditi i instalirani (produkcijski) Solarni poslužitelj
+env = {**os.environ, "SOLARI2_HOME": str(HOME), "SOLARI_DEV_GATEWAY_SID": SID, "SOLARI_DEV_API_PIPE": PIPE,
+       "SOLARI_DEV_SERVICE_MUTEX": "Local\SolariE2EAndroidService"}
 service = subprocess.Popen([SERVER, "--service"], env=env)
 time.sleep(3)
 gateway = subprocess.Popen([GATEWAY, "--console", "--data-dir", str(HOME / "gateway"), "--pipe", PIPE, "--pipe-owner", SID],
@@ -55,19 +58,21 @@ try:
     cdp.js(t, "document.querySelector('#nav [data-panel=\"server\"]').click(); 0")
     time.sleep(3)
     cert = cdp.js(t, "document.getElementById('server-cert').innerText")
-    m = re.search(r"\b([A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4})\b", cert or "")
+    m = re.search(r"\b([A-Z2-7]{5}-[A-Z2-7]{5}-[A-Z2-7]{5}-[A-Z2-7]{5})\b", cert or "")  # 5.0.2: 100 bita
     pairing = m.group(1) if m else ""
     check("server", "prozor poslužitelja prikazuje kod za uparivanje", bool(pairing), cert)
     cdp.capture(t, "e2e40_server_pairing")
     cdp.js(t, "document.querySelector('[data-action=\"user-add\"]').click(); 0")
     time.sleep(0.5)
     cdp.js(t, "; ".join(f"document.querySelector('#user-dialog [data-user=\"{k}\"]').value = {json.dumps(v)}"
-                        for k, v in {"first_name": "Ana", "last_name": "Horvat", "email": "ana@primjer.hr", "password": "", "password2": ""}.items())
+                        for k, v in {"first_name": "Ana", "last_name": "Horvat", "email": "ana@primjer.hr", "password": USER_PW,
+                                     "password2": USER_PW}.items())
            + "; document.getElementById('user-submit').click(); 0")
     time.sleep(4)
-    code = cdp.js(t, "(document.querySelector('#users-result .activation-code code') || {}).textContent || ''")
+    # 5.0: aktivacijski kod ide samo e-poštom (ne prikazuje se administratoru) – test koristi korisnika s lozinkom
+    code = USER_PW
     msg = cdp.js(t, "document.getElementById('users-result').innerText")
-    check("server", "novi korisnik bez lozinke dobiva aktivacijski kod (XXXX-XXXX-XXXX)", bool(re.fullmatch(r"[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}", code or "")), msg)
+    check("server", "korisnik s lozinkom izrađen", "dodan" in (msg or "").lower(), msg)
     check("server", "nema zajedničke lozinke 12345678 u poruci", "12345678" not in (msg or ""), msg)
     cdp.capture(t, "e2e40_server_activation")
     for src in ("e2e40_server_pairing", "e2e40_server_activation"):
@@ -97,18 +102,15 @@ try:
 
     r = login("", code)
     check("android", "bez koda za uparivanje: traži kod, lozinka se ne šalje", "uparivanje" in r.lower() or "pairing" in r.lower(), r)
-    r = login("AAAA-BBBB-CCCC", code)
+    r = login("AAAAA-BBBBB-CCCCC-DDDDD", code)
     check("android", "pogrešan kod: odbijeno (moguće presretanje)", "ne odgovara" in r or "does not match" in r, r)
-    r = login(pairing.lower().replace("-", ""), code)
-    check("android", "točan kod + aktivacijski kod: traži vlastitu lozinku", js("!document.getElementById('newpw').hidden"), r)
-    shot("e2e40_android_activation")
-    r = login(pairing, code, "Ana-Vlastita-Lozinka-2026")
+    r = login(pairing.lower().replace("-", ""), code)  # kod malim slovima i bez crtica
     acc = js("document.getElementById('account').innerText")
-    check("android", "aktivirano vlastitom lozinkom, prijavljena", "Ana" in acc, (r, acc))
+    check("android", "točan kod za uparivanje (20 znakova) + lozinka: prijavljena", "Ana" in acc, (r, acc))
     shot("e2e40_android_loggedin")
     prefs = adb("shell", "run-as", PKG, "cat", "shared_prefs/solari.xml", check=False).stdout.decode(errors="replace")
     check("android", "SharedPreferences: bez lozinke, koda i e-pošte u čitljivom obliku",
-          "Ana-Vlastita" not in prefs and code not in prefs and "primjer.hr" not in prefs, prefs[:200])
+          USER_PW not in prefs and pairing not in prefs and "primjer.hr" not in prefs, prefs[:200])
     js("document.querySelector('[data-action=save]').click(); 1")
     time.sleep(10)
     connect()

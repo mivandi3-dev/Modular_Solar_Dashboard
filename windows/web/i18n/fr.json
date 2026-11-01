@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "Les nouveaux mots de passe ne correspondent pas.",
   "Poslužitelj je vratio grešku.": "Le serveur a renvoyé une erreur.",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Faites glisser un widget sur l'écran ou cliquez sur <b>+</b>. Déplacez un widget en le faisant glisser, redimensionnez-le avec le coin inférieur droit, ⚙ ouvre les options, ✕ le supprime. En plein écran (F11 / Alt + Enter), le menu est masqué.",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter ou double-clic"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter ou double-clic",
+  "Raspored je zaključan": "La disposition est verrouillée",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "Saisissez le code PIN des paramètres pour modifier la disposition. Elle reste déverrouillée 10 minutes.",
+  "PIN postavki": "Code PIN des paramètres",
+  "Raspored nije promijenjen.": "La disposition n’a pas été modifiée.",
+  "Raspored je zaključan – upišite PIN postavki.": "La disposition est verrouillée – saisissez le code PIN des paramètres.",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "Le dossier de disposition est une jonction ou un lien symbolique – la disposition n’a pas été enregistrée."
  }
 }

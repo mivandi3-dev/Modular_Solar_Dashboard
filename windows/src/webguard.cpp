@@ -67,7 +67,8 @@ bool main_window_method(const std::string& method) {
     static const std::set<std::string> kMain = {
         "get_dashboard", "get_editor",  "save_layout",  "remove_page", "set_rotation",      "reset_layout",
         "set_display",   "set_sidebar", "toggle_fullscreen", "exit_fullscreen", "open_settings", "reload",
-        "quit",          "window_control", "window_state", "get_i18n"};  // 5.0.2 (audit W-14): bez open_logs
+        "quit",          "window_control", "window_state", "get_i18n",  // 5.0.2 (audit W-14): bez open_logs
+        "unlock_layout", "layout_state"};                                     // 5.0.2 (audit W-02)
     return kMain.count(method) > 0;
 }
 

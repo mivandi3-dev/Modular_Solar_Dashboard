@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "新しいパスワードが一致しません。",
   "Poslužitelj je vratio grešku.": "サーバーがエラーを返しました。",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "ウィジェットを画面にドラッグするか、<b>+</b> をクリックします。画面上のウィジェットはドラッグで移動、右下の角でサイズ変更、⚙ はオプション、✕ は削除です。全画面（F11 / Alt + Enter）ではメニューは非表示になります。",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter またはダブルクリック"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter またはダブルクリック",
+  "Raspored je zaključan": "レイアウトはロックされています",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "レイアウトを変更するには設定の PIN を入力してください。10 分間ロック解除されます。",
+  "PIN postavki": "設定の PIN",
+  "Raspored nije promijenjen.": "レイアウトは変更されませんでした。",
+  "Raspored je zaključan – upišite PIN postavki.": "レイアウトはロックされています。設定の PIN を入力してください。",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "レイアウトのフォルダーがジャンクションまたはシンボリックリンクのため、レイアウトは保存されませんでした。"
  }
 }

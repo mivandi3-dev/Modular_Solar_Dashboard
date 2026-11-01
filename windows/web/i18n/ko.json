@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "새 비밀번호가 일치하지 않습니다.",
   "Poslužitelj je vratio grešku.": "서버가 오류를 반환했습니다.",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "위젯을 화면으로 끌어오거나 <b>+</b>를 클릭하세요. 화면의 위젯은 끌어서 옮기고, 오른쪽 아래 모서리로 크기를 바꾸며, ⚙는 옵션, ✕는 제거입니다. 전체 화면(F11 / Alt + Enter)에서는 메뉴가 숨겨집니다.",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 또는 두 번 클릭"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 또는 두 번 클릭",
+  "Raspored je zaključan": "레이아웃이 잠겨 있습니다",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "레이아웃을 변경하려면 설정 PIN을 입력하세요. 10분 동안 잠금이 해제됩니다.",
+  "PIN postavki": "설정 PIN",
+  "Raspored nije promijenjen.": "레이아웃이 변경되지 않았습니다.",
+  "Raspored je zaključan – upišite PIN postavki.": "레이아웃이 잠겨 있습니다. 설정 PIN을 입력하세요.",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "레이아웃 폴더가 정션 또는 심볼릭 링크이므로 레이아웃을 저장하지 않았습니다."
  }
 }

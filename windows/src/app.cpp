@@ -399,14 +399,34 @@ void App::admin_logout() {
 }
 
 json App::unlock(const std::string& pin) {
+    json r = verify_pin(pin, true);
+    if (r.value("ok", false)) settings_unlocked_ = true;
+    return r;
+}
+
+json App::unlock_layout(const std::string& pin) {
+    json r = verify_pin(pin, false);  // PIN se ne pamti za izmjene postavki – vrijedi samo za raspored
+    if (r.value("ok", false)) {
+        layout_unlocked_until_ = now() + kLayoutUnlockS;
+        log_info("Raspored otključan PIN-om na " + std::to_string(kLayoutUnlockS / 60) + " min");
+    }
+    return r;
+}
+
+bool App::layout_unlocked() const {
+    if (server_role_ || settings_unlocked_) return true;
+    if (!broker_mode_ && settings().settings_pin_hash.empty()) return true;  // razvoj / prvo pokretanje bez PIN-a
+    return now() < layout_unlocked_until_.load();
+}
+
+json App::verify_pin(const std::string& pin, bool remember_for_broker) {
     if (broker_mode_) {  // PIN provjerava broker (zaključavanje 15 min nakon 5 pogrešnih vodi on)
         const json r = ipc_check_pin(pin);
         if (!r.value("ok", false)) return {{"ok", false}, {"message", r.value("message", tr("Pogrešan PIN."))}};
-        {
+        if (remember_for_broker) {
             std::lock_guard lock(mutex_);
             broker_pin_ = pin;
         }
-        settings_unlocked_ = true;
         return {{"ok", true}, {"message", tr("Otključano.")}};
     }
     constexpr int kMaxAttempts = 5, kLockoutS = 60;
@@ -415,7 +435,6 @@ json App::unlock(const std::string& pin) {
         return {{"ok", false}, {"message", tr("Previše pogrešnih pokušaja. Pokušajte za {s} s.", {{"s", std::to_string(pin_locked_until_ - t)}})}};
     }
     if (check_pin(pin, settings().settings_pin_hash)) {
-        settings_unlocked_ = true;
         pin_failures_ = 0;
         return {{"ok", true}, {"message", tr("Otključano.")}};
     }

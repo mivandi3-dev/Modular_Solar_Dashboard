@@ -1072,6 +1072,12 @@
   "Nove lozinke se ne podudaraju.": "两次输入的新密码不一致。",
   "Poslužitelj je vratio grešku.": "服务器返回错误。",
   "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "将小组件拖到屏幕上或点击 <b>+</b>。拖动可移动屏幕上的小组件，拖动右下角可调整大小，⚙ 为选项，✕ 为移除。在全屏（F11 / Alt + Enter）下菜单会隐藏。",
-  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 或双击"
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 或双击",
+  "Raspored je zaključan": "布局已锁定",
+  "Za izmjenu rasporeda upišite PIN postavki. Otključano ostaje 10 minuta.": "请输入设置 PIN 以更改布局。解锁状态保持 10 分钟。",
+  "PIN postavki": "设置 PIN",
+  "Raspored nije promijenjen.": "布局未更改。",
+  "Raspored je zaključan – upišite PIN postavki.": "布局已锁定——请输入设置 PIN。",
+  "Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen.": "布局文件夹是联接或符号链接——布局未保存。"
  }
 }
