@@ -130,6 +130,29 @@ TEST_CASE("obrazac: greške po poljima") {
     }
 }
 
+TEST_CASE("postavke: tema ikona (classic | neon | iconset)") {
+    CHECK(Settings{}.icon_theme == "classic");
+    for (const char* t : {"classic", "neon", "iconset"}) {
+        CAPTURE(t);
+        CHECK(is_icon_theme(t));
+        CHECK(settings_from_json({{"icon_theme", t}}).icon_theme == t);
+        json f = valid_form();
+        f["icon_theme"] = t;
+        const auto v = validate_form(f, Settings{}, kIfaces);
+        REQUIRE(v.errors.empty());
+        CHECK(v.settings->icon_theme == t);
+        CHECK(to_json(*v.settings).value("icon_theme", "") == t);
+    }
+    CHECK(settings_from_json({{"icon_theme", "../x"}}).icon_theme == "classic");
+    json f = valid_form();
+    f["icon_theme"] = "<svg onload=x>";
+    CHECK(validate_form(f, Settings{}, kIfaces).errors.count("icon_theme") == 1);
+    f.erase("icon_theme");  // stari klijent bez polja → zadržava trenutnu temu
+    Settings cur;
+    cur.icon_theme = "iconset";
+    CHECK(validate_form(f, cur, kIfaces).settings->icon_theme == "iconset");
+}
+
 TEST_CASE("obrazac: naslov u zaglavlju") {
     json f = valid_form();
     f["headline"] = "Naša elektrana";

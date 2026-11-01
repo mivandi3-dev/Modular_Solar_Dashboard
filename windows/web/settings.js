@@ -93,6 +93,7 @@ function fill(s) {
   $("#smtp_password").placeholder = s.smtp_password_set ? "••••••••" : "";
   $("#smtp-password-hint").textContent = s.smtp_password_set ? T("spremljena – ostavite prazno da ostane ista") : "";
   renderPalettes(s);
+  renderIconThemes(s);
   showDeviceTypes(state.device_types);
   renderProfiles(s.device_profile);
   showDevice(s.device_type || "logger");
@@ -355,7 +356,7 @@ function renderAll(s) {
 function collect() {
   const form = {};
   $$("[data-field]").forEach((el) => { form[el.dataset.field] = el.type === "checkbox" ? el.checked : el.value; });
-  ["logger_interface", "internet_interface", "display_scale", "device_type", "night_mode", "data_source"].forEach((name) => {
+  ["logger_interface", "internet_interface", "display_scale", "device_type", "night_mode", "data_source", "icon_theme"].forEach((name) => {
     const r = $(`input[name="${name}"]:checked`);
     form[name] = r ? r.value : "";
   });
@@ -587,6 +588,21 @@ document.addEventListener("click", (e) => {
 // ---------------------------------------------------------------- tema: palete boja (colors.js, zajedničko s Androidom)
 function selectedPalette() {
   return ($('input[name="palette"]:checked') || {}).value || "dark";
+}
+
+// ---------------------------------------------------------------- tema ikona (icons.js): odabir s primjerima
+const ICON_SAMPLE = ["sun", "sun_cloud", "rain", "bolt", "battery", "home", "chart", "globe"];
+function renderIconThemes(s) {
+  const want = ["neon", "iconset"].includes(s.icon_theme) ? s.icon_theme : "classic";
+  $$('input[name="icon_theme"]').forEach((r) => { r.checked = r.value === want; });
+  const I = window.Icons;
+  if (!I) return;
+  const ui = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  $$(".icon-preview").forEach((el) => {
+    I.setTheme(el.dataset.iconTheme, ui);
+    el.innerHTML = ICON_SAMPLE.map((k) => `<span>${I.get(k)}</span>`).join("");  // statične ikone iz icons.js
+  });
+  I.setTheme("classic", ui);
 }
 
 function renderPalettes(s) {

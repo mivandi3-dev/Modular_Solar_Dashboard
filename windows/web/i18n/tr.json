@@ -1012,6 +1012,15 @@
   "PIN postavki je obavezan i ne može se ukloniti.": "Ayarlar PIN'i zorunludur ve kaldırılamaz.",
   "Neispravan zahtjev.": "Geçersiz istek.",
   "Uvoz nije uspio.": "İçe aktarma başarısız oldu.",
-  "Mapa podataka je spojnica – uvoz odbijen.": "Veri klasörü bir bağlantı noktası (junction) – içe aktarma reddedildi."
+  "Mapa podataka je spojnica – uvoz odbijen.": "Veri klasörü bir bağlantı noktası (junction) – içe aktarma reddedildi.",
+  "Ikone": "Simgeler",
+  "Klasične": "Klasik",
+  "emoji ikone sustava": "sistem emoji simgeleri",
+  "Hi-tech neon": "Yüksek teknoloji neon",
+  "u stilu ikone aplikacije": "uygulama simgesi tarzında",
+  "Hi-tech komplet": "Yüksek teknoloji seti",
+  "3D ikone sa sjajem": "parlak 3D simgeler",
+  "Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.": "Tüm pano simgeleri için geçerlidir: güç ve üretim, güneş ve hava tahmini, rekorlar, tasarruf ve enerji akışı.",
+  "Nepoznata tema ikona.": "Bilinmeyen simge teması."
  }
 }

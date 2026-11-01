@@ -1012,6 +1012,15 @@
   "PIN postavki je obavezan i ne može se ukloniti.": "設定 PIN は必須で、削除できません。",
   "Neispravan zahtjev.": "無効な要求です。",
   "Uvoz nije uspio.": "インポートに失敗しました。",
-  "Mapa podataka je spojnica – uvoz odbijen.": "データフォルダーがジャンクションです – インポートを拒否しました。"
+  "Mapa podataka je spojnica – uvoz odbijen.": "データフォルダーがジャンクションです – インポートを拒否しました。",
+  "Ikone": "アイコン",
+  "Klasične": "クラシック",
+  "emoji ikone sustava": "システムの絵文字アイコン",
+  "Hi-tech neon": "ハイテクネオン",
+  "u stilu ikone aplikacije": "アプリアイコンのスタイル",
+  "Hi-tech komplet": "ハイテクセット",
+  "3D ikone sa sjajem": "光沢のある3Dアイコン",
+  "Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.": "ダッシュボードのすべてのアイコンに適用：出力と発電量、太陽と天気予報、記録、節約、エネルギーの流れ。",
+  "Nepoznata tema ikona.": "不明なアイコンテーマです。"
  }
 }

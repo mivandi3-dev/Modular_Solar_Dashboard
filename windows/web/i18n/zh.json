@@ -1012,6 +1012,15 @@
   "PIN postavki je obavezan i ne može se ukloniti.": "设置 PIN 为必填项，不能删除。",
   "Neispravan zahtjev.": "无效请求。",
   "Uvoz nije uspio.": "导入失败。",
-  "Mapa podataka je spojnica – uvoz odbijen.": "数据文件夹是联接点 – 已拒绝导入。"
+  "Mapa podataka je spojnica – uvoz odbijen.": "数据文件夹是联接点 – 已拒绝导入。",
+  "Ikone": "图标",
+  "Klasične": "经典",
+  "emoji ikone sustava": "系统表情图标",
+  "Hi-tech neon": "高科技霓虹",
+  "u stilu ikone aplikacije": "应用图标风格",
+  "Hi-tech komplet": "高科技图标集",
+  "3D ikone sa sjajem": "带光泽的 3D 图标",
+  "Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.": "适用于仪表板的所有图标：功率与发电量、太阳与天气预报、记录、节省及能量流。",
+  "Nepoznata tema ikona.": "未知的图标主题。"
  }
 }

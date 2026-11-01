@@ -1012,6 +1012,15 @@
   "PIN postavki je obavezan i ne može se ukloniti.": "설정 PIN은 필수이며 삭제할 수 없습니다.",
   "Neispravan zahtjev.": "잘못된 요청입니다.",
   "Uvoz nije uspio.": "가져오기에 실패했습니다.",
-  "Mapa podataka je spojnica – uvoz odbijen.": "데이터 폴더가 정션입니다 – 가져오기가 거부되었습니다."
+  "Mapa podataka je spojnica – uvoz odbijen.": "데이터 폴더가 정션입니다 – 가져오기가 거부되었습니다.",
+  "Ikone": "아이콘",
+  "Klasične": "클래식",
+  "emoji ikone sustava": "시스템 이모지 아이콘",
+  "Hi-tech neon": "하이테크 네온",
+  "u stilu ikone aplikacije": "앱 아이콘 스타일",
+  "Hi-tech komplet": "하이테크 세트",
+  "3D ikone sa sjajem": "광택 있는 3D 아이콘",
+  "Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.": "대시보드의 모든 아이콘에 적용: 출력과 발전량, 태양과 일기 예보, 기록, 절감 및 에너지 흐름.",
+  "Nepoznata tema ikona.": "알 수 없는 아이콘 테마입니다."
  }
 }

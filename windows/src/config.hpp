@@ -50,6 +50,9 @@ struct Settings {
     std::string theme = "dark";
     // paleta boja (web/colors.js): "" = boje teme, inače ocean, forest, sunset… (tema je osnova palete)
     std::string palette;
+    // tema ikona dashboarda (web/icons.js): "classic" = emoji, "neon" = hi-tech SVG ikone (stil ikone aplikacije),
+    // "iconset" = PNG ikone iz kompleta (web/icons/iconset)
+    std::string icon_theme = "classic";
     std::string language = "hr";  // hr | en | de | fr | it | tr | zh | ja | ko
     double weather_lat = 45.815;
     double weather_lon = 15.982;
@@ -131,7 +134,8 @@ Validation validate_form(const json& form, const Settings& current, const std::v
 std::optional<std::vector<int>> parse_units(const std::string& text);
 bool is_device_type(const std::string& type);
 bool is_serial_device(const std::string& device_type, const std::string& profile);  // COM/USB umjesto mreže  // logger | inverter | sunspec | fronius | vendor
-bool is_palette(const std::string& key);  // "" ili paleta iz web/colors.js
+bool is_palette(const std::string& key);
+bool is_icon_theme(const std::string& key);  // classic | neon | iconset  // "" ili paleta iz web/colors.js
 std::optional<uint32_t> parse_logger_serial(const std::string& text);  // 1–4294967295, samo znamenke
 
 // Adrese e-pošte odvojene zarezom, točka-zarezom ili novim redom (bez ponavljanja, najviše 20).

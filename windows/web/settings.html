@@ -332,6 +332,16 @@
         <span class="err" data-error="palette"></span>
       </fieldset>
       <fieldset class="glass card client-only">
+        <legend>Ikone</legend>
+        <div class="choices three icon-themes" role="radiogroup" aria-label="Ikone">
+          <label class="choice"><input type="radio" name="icon_theme" value="classic"><span class="icon-preview" data-icon-theme="classic"></span><b>Klasične</b><small>emoji ikone sustava</small></label>
+          <label class="choice"><input type="radio" name="icon_theme" value="neon"><span class="icon-preview" data-icon-theme="neon"></span><b>Hi-tech neon</b><small>u stilu ikone aplikacije</small></label>
+          <label class="choice"><input type="radio" name="icon_theme" value="iconset"><span class="icon-preview" data-icon-theme="iconset"></span><b>Hi-tech komplet</b><small>3D ikone sa sjajem</small></label>
+        </div>
+        <p class="muted small">Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.</p>
+        <span class="err" data-error="icon_theme"></span>
+      </fieldset>
+      <fieldset class="glass card client-only">
         <legend>Noćni način</legend>
         <div class="choices three" role="radiogroup" aria-label="Noćni način">
           <label class="choice"><input type="radio" name="night_mode" value="off"><b>Isključen</b><small>prikaz radi cijelu noć</small></label>
@@ -530,6 +540,7 @@
 <script src="report.js"></script>
 <script src="themes.js"></script>
 <script src="colors.js"></script>
+<script src="icons.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="bridge.js"></script>
 <script src="window.js"></script>

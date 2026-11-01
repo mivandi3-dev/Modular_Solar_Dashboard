@@ -1012,6 +1012,15 @@
   "PIN postavki je obavezan i ne može se ukloniti.": "Il PIN delle impostazioni è obbligatorio e non può essere rimosso.",
   "Neispravan zahtjev.": "Richiesta non valida.",
   "Uvoz nije uspio.": "Importazione non riuscita.",
-  "Mapa podataka je spojnica – uvoz odbijen.": "La cartella dei dati è una giunzione – importazione rifiutata."
+  "Mapa podataka je spojnica – uvoz odbijen.": "La cartella dei dati è una giunzione – importazione rifiutata.",
+  "Ikone": "Icone",
+  "Klasične": "Classiche",
+  "emoji ikone sustava": "icone emoji di sistema",
+  "Hi-tech neon": "Neon hi-tech",
+  "u stilu ikone aplikacije": "nello stile dell'icona dell'app",
+  "Hi-tech komplet": "Set hi-tech",
+  "3D ikone sa sjajem": "icone 3D luminose",
+  "Vrijedi za sve ikone dashboarda: snaga i proizvodnja, sunce i prognoza vremena, zapisi, ušteda i tok energije.": "Vale per tutte le icone della dashboard: potenza e produzione, sole e previsioni meteo, record, risparmio e flusso di energia.",
+  "Nepoznata tema ikona.": "Tema icone sconosciuto."
  }
 }

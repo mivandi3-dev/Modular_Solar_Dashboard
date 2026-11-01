@@ -101,6 +101,8 @@ const UI = (() => {
     <path d="M8 4h19l-3 17H5z" fill="#2F6BEA" stroke="#CBD5E1" stroke-width="1.4" stroke-linejoin="round"/>
     <path d="M14.3 4l-2.1 17M20.7 4l-2.6 17M7 9.7h19M6 15.3h19" stroke="#CBD5E1" stroke-width="1"/>
     <path d="M14.5 21v5M10 27h9" stroke="#94A3B8" stroke-width="2" stroke-linecap="round"/></svg>`;
+  // ikona solarnog panela: klasična (izvorna) ili neon (icons.js)
+  const panelIcon = () => (Icons.theme() !== "classic" ? Icons.get("panel") : SOLAR_PANEL_ICON);
   const tile = (icon, tintColor) => `<div class="tile" style="background:${tintColor}">${icon}</div>`;
 
   // ---------------------------------------------------------------- sekcije
@@ -115,7 +117,7 @@ const UI = (() => {
   }
 
   function heroContent(greeting, headlineHtml, siteHtml, weatherHtml) {
-    return `<div class="hero"><div class="hero-left"><div><div class="greet">${esc(greeting)}  ·  <span class="live-clock"></span></div>`
+    return `<div class="hero"><div class="hero-left"><div><div class="greet">${esc(greeting)} ${Icons.get("greet")}  ·  <span class="live-clock"></span></div>`
       + `<h1>${headlineHtml}</h1></div>${siteHtml}</div>${weatherHtml}</div>`;
   }
 
@@ -202,7 +204,7 @@ const UI = (() => {
   }
 
   return {
-    SOLAR_PANEL_ICON, esc, safeImageUrl, fmt, energy, mass, dateHr, statusDot, delta,
+    SOLAR_PANEL_ICON, panelIcon, esc, safeImageUrl, fmt, energy, mass, dateHr, statusDot, delta,
     hhmm, tint, rgba, setTheme, theme: () => pal, themeName: () => themeName, weekdayIndex, sparkline, speedometer, tile,
     heroBackground, heroContent, siteCard, weatherCard, kpiStrip, cardHeader, empty, listCard, speedometerCard, flowLayers,
   };
@@ -217,18 +219,18 @@ function parseDate(iso) {
 // ---------------------------------------------------------------- WMO šifre vremena (solar/weather.py)
 const Weather = (() => {
   const WMO = {
-    0: ["Vedro", "☀️", "🌙"], 1: ["Pretežno vedro", "🌤️", "🌙"], 2: ["Djelomično oblačno", "⛅", "☁️"], 3: ["Oblačno", "☁️", "☁️"],
-    45: ["Magla", "🌫️", "🌫️"], 48: ["Magla s injem", "🌫️", "🌫️"], 51: ["Slaba rosulja", "🌦️", "🌧️"], 53: ["Rosulja", "🌦️", "🌧️"],
-    55: ["Jaka rosulja", "🌧️", "🌧️"], 56: ["Ledena rosulja", "🌧️", "🌧️"], 57: ["Ledena rosulja", "🌧️", "🌧️"],
-    61: ["Slaba kiša", "🌦️", "🌧️"], 63: ["Kiša", "🌧️", "🌧️"], 65: ["Jaka kiša", "🌧️", "🌧️"], 66: ["Ledena kiša", "🌧️", "🌧️"],
-    67: ["Ledena kiša", "🌧️", "🌧️"], 71: ["Slab snijeg", "🌨️", "🌨️"], 73: ["Snijeg", "🌨️", "🌨️"], 75: ["Jak snijeg", "❄️", "❄️"],
-    77: ["Zrnati snijeg", "🌨️", "🌨️"], 80: ["Pljuskovi", "🌦️", "🌧️"], 81: ["Pljuskovi", "🌧️", "🌧️"], 82: ["Jaki pljuskovi", "⛈️", "⛈️"],
-    85: ["Snježni pljuskovi", "🌨️", "🌨️"], 86: ["Snježni pljuskovi", "🌨️", "🌨️"], 95: ["Grmljavina", "⛈️", "⛈️"],
-    96: ["Grmljavina s tučom", "⛈️", "⛈️"], 99: ["Grmljavina s tučom", "⛈️", "⛈️"],
+    0: ["Vedro", "sun", "moon"], 1: ["Pretežno vedro", "sun_cloud", "moon"], 2: ["Djelomično oblačno", "partly", "cloud"], 3: ["Oblačno", "cloud", "cloud"],
+    45: ["Magla", "fog", "fog"], 48: ["Magla s injem", "fog", "fog"], 51: ["Slaba rosulja", "showers", "rain"], 53: ["Rosulja", "showers", "rain"],
+    55: ["Jaka rosulja", "rain", "rain"], 56: ["Ledena rosulja", "rain", "rain"], 57: ["Ledena rosulja", "rain", "rain"],
+    61: ["Slaba kiša", "showers", "rain"], 63: ["Kiša", "rain", "rain"], 65: ["Jaka kiša", "rain", "rain"], 66: ["Ledena kiša", "rain", "rain"],
+    67: ["Ledena kiša", "rain", "rain"], 71: ["Slab snijeg", "snow", "snow"], 73: ["Snijeg", "snow", "snow"], 75: ["Jak snijeg", "snowflake", "snowflake"],
+    77: ["Zrnati snijeg", "snow", "snow"], 80: ["Pljuskovi", "showers", "rain"], 81: ["Pljuskovi", "rain", "rain"], 82: ["Jaki pljuskovi", "thunder", "thunder"],
+    85: ["Snježni pljuskovi", "snow", "snow"], 86: ["Snježni pljuskovi", "snow", "snow"], 95: ["Grmljavina", "thunder", "thunder"],
+    96: ["Grmljavina s tučom", "thunder", "thunder"], 99: ["Grmljavina s tučom", "thunder", "thunder"],
   };
   function describe(code, isDay = 1) {
-    const [label, day, night] = WMO[code] || ["—", "🌡️", "🌡️"];
-    return { label: T(label), icon: isDay ? day : night };
+    const [label, day, night] = WMO[code] || ["—", "thermometer", "thermometer"];
+    return { label: T(label), icon: Icons.get(isDay ? day : night) };  // tema ikona: icons.js
   }
   return { describe };
 })();

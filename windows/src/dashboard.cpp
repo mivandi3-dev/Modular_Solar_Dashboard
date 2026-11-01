@@ -6,7 +6,7 @@
 namespace sm {
 
 json ui_settings(const Settings& s) {
-    return {{"theme", s.theme}, {"palette", s.palette}, {"plant_name", s.plant_name}, {"location", s.location}, {"commissioned", s.commissioned},
+    return {{"theme", s.theme}, {"palette", s.palette}, {"icon_theme", s.icon_theme}, {"plant_name", s.plant_name}, {"location", s.location}, {"commissioned", s.commissioned},
             {"speedo_max_kw", s.speedo_max_kw}, {"peak_power_kwp", s.peak_power_kwp}, {"co2_factor", s.co2_factor},
             {"meter_unit_id", s.meter_unit_id}, {"modbus_host", s.modbus_host}, {"poll_interval_s", s.poll_interval_s},
             {"hide_idle_cursor", s.hide_idle_cursor}, {"headline", s.headline}, {"language", s.language},
@@ -30,6 +30,7 @@ json build_dashboard(DataService& data, WeatherService& weather, const Catalog& 
 void apply_local_display(json& out, const Settings& local) {
     out["theme"] = local.theme;
     out["palette"] = local.palette;  // paleta je postavka svakog ekrana, kao i tema
+    out["icon_theme"] = local.icon_theme;  // i tema ikona
     out["language"] = local.language;
     out["hide_idle_cursor"] = local.hide_idle_cursor;
     out["night_mode"] = local.night_mode;

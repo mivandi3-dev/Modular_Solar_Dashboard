@@ -106,6 +106,13 @@
       <label class="choice palette" data-palette="sky"><input type="radio" name="palette" value="sky"><span class="swatch"></span><b>Nebo</b><small>svijetloplava</small></label>
       <label class="choice palette" data-palette="sand"><input type="radio" name="palette" value="sand"><span class="swatch"></span><b>Pijesak</b><small>bež i narančasta</small></label>
     </div>
+    <p class="muted small" style="margin:14px 0 8px">Ikone</p>
+    <div class="choices three icon-themes" role="radiogroup" aria-label="Ikone">
+      <label class="choice"><input type="radio" name="icon_theme" value="classic"><span class="icon-preview" data-icon-theme="classic"></span><b>Klasične</b><small>emoji ikone sustava</small></label>
+      <label class="choice"><input type="radio" name="icon_theme" value="neon"><span class="icon-preview" data-icon-theme="neon"></span><b>Hi-tech neon</b><small>u stilu ikone aplikacije</small></label>
+      <label class="choice"><input type="radio" name="icon_theme" value="iconset"><span class="icon-preview" data-icon-theme="iconset"></span><b>Hi-tech komplet</b><small>3D ikone sa sjajem</small></label>
+    </div>
+    <span class="err" data-error="icon_theme"></span>
     <label class="toggle" style="margin-top:14px"><input type="checkbox" data-field="start_fullscreen"><span></span>Pokreni preko cijelog zaslona</label>
     <label class="toggle"><input type="checkbox" data-field="keep_on"><span></span>Ne gasi zaslon dok je aplikacija otvorena</label>
   </fieldset>
@@ -158,6 +165,7 @@
 <script src="vendor/qrcode.js"></script>
 <script src="themes.js"></script>
 <script src="colors.js"></script>
+<script src="icons.js"></script>
 <script src="settings-android.js"></script>
 </body>
 </html>

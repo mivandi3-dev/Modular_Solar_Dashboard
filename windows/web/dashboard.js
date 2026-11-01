@@ -18,7 +18,7 @@
   // Tekst naslova iz postavki: HTML se escapira, *dio teksta* istakne se bojom (isto kao ui.highlight).
   const highlight = (text) => UI.esc(text).replace(/\*([^*]+)\*/g, "<span class='hl'>$1</span>");
   const heightPx = (rows) => rows * GRID_ROW + (rows - 1) * GRID_GAP;
-  const greeting = (h) => (h >= 5 && h < 12 ? T("Dobro jutro") : h >= 12 && h < 18 ? T("Dobar dan") : T("Dobra večer")) + " 👋";
+  const greeting = (h) => (h >= 5 && h < 12 ? T("Dobro jutro") : h >= 12 && h < 18 ? T("Dobar dan") : T("Dobra večer"));  // ikona pozdrava dolazi iz teme ikona (heroContent)
 
   // ---------------------------------------------------------------- kontekst za widgete (solar/widgets/context.py)
   function makeCtx(d) {
@@ -49,13 +49,14 @@
   }
 
   // ---------------------------------------------------------------- iscrtavanje
-  function setTheme(name, palette) {
+  function setTheme(name, palette, iconTheme) {
     const SC = window.SolariColors;
     const colors = SC ? SC.colorsOf(SC.paletteKey(name, palette)) : {};
-    const key = `${name} ${palette || ""}`;  // tema i paleta boja (Postavke → Prikaz → Tema)
+    const key = `${name} ${palette || ""} ${iconTheme || ""}`;  // tema, paleta boja i tema ikona (Postavke → Prikaz)
     if (key === theme) return;
     theme = key;
     UI.setTheme(name, colors);
+    Icons.setTheme(iconTheme, UI.themeName());
     document.getElementById("theme-css").href = `dashboard-${UI.themeName()}.css`;
     if (window.SolariColors) window.SolariColors.apply(UI.theme(), colors);
     last = { heroBg: "", hero: "" };
@@ -178,7 +179,7 @@
 
   function render() {
     if (!data) return;
-    setTheme(data.settings.theme, data.settings.palette);
+    setTheme(data.settings.theme, data.settings.palette, data.settings.icon_theme);
     const ctx = makeCtx(data);
     renderHero(ctx);
     renderGrid(ctx);

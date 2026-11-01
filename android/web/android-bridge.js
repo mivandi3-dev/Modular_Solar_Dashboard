@@ -109,7 +109,7 @@
       hasMeter = Boolean(d.settings && d.settings.meter_unit_id);
       capabilities = d.capabilities || [];  // uređaj na poslužitelju (widgeti uređaja)
       const p = prefs(), local = pages();
-      Object.assign(d.settings, { theme: p.theme, palette: p.palette || "", language: p.language, hide_idle_cursor: false,
+      Object.assign(d.settings, { theme: p.theme, palette: p.palette || "", icon_theme: p.icon_theme || "classic", language: p.language, hide_idle_cursor: false,
         night_mode: p.night_mode, night_from: p.night_from, night_to: p.night_to, forecast_days: p.forecast_days || 5 });
       d.pages = local.pages;
       d.rotateS = local.rotateS;

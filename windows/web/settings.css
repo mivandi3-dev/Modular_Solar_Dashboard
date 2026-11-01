@@ -108,6 +108,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 /* ---- izbori (razlučivost, tema) ---- */
 .choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .choices.two { grid-template-columns: 1fr 1fr; }
+.choices.three { grid-template-columns: repeat(3, 1fr); }
+.icon-preview .ix-ico { width: 1.6rem; height: 1.6rem; }
 .choice { position: relative; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--field);
           cursor: pointer; color: var(--text); gap: 3px; transition: border-color .15s, background .15s; }
 .choice:hover { border-color: var(--muted); }
@@ -171,6 +173,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 #device-card [data-show][hidden], #device-card [data-device-type][hidden] { display: none !important; }
 
 /* ---- tema: palete boja ---- */
+.icon-preview { display: flex; flex-wrap: wrap; gap: 8px; font-size: 1.45rem; margin-bottom: 8px; min-height: 2rem; }
 .choices.palettes { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .palette .swatch { display: block; height: 76px; border-radius: 12px; margin-bottom: 10px; border: 1px solid var(--line); overflow: hidden; }
 .palette .swatch svg { display: block; width: 100%; height: 100%; }
@@ -243,3 +246,4 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 html { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent; }
 :root, [data-theme="dark"] { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
+@media (max-width: 520px) { .choices.three { grid-template-columns: 1fr; } }

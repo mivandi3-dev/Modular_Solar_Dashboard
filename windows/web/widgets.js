@@ -47,34 +47,34 @@ const Widgets = (() => {
       if (ctx.stale) {
         const u = rt.updated_at ? new Date(rt.updated_at * 1000) : null;
         const last = u ? T(" · zadnje {time}", { time: `${fmtDate("day_month", u)} ${UI.hhmm(u)}` }) : "";
-        [value, sub] = ["—", `<span class="warn">⚠ ${T("{device} nedostupan", { device: ctx.device })}${last}</span>`];
+        [value, sub] = ["—", `<span class="warn">${Icons.get("warning")} ${T("{device} nedostupan", { device: ctx.device })}${last}</span>`];
       } else {
         value = fmt(ctx.power, ctx.power < 100 ? 2 : 1);
         sub = statusDot(rt.running) + T("Uživo · {pct} % instalirane snage", { pct: fmt(ctx.loadPct, 0) });
       }
-      item = { icon: UI.SOLAR_PANEL_ICON, tint: tint("blue"), label: T("Trenutna snaga"), value, unit: "kW", sub, spark: thin(ctx.curve.map((p) => p.kw)) };
+      item = { icon: UI.panelIcon(), tint: tint("blue"), label: T("Trenutna snaga"), value, unit: "kW", sub, spark: thin(ctx.curve.map((p) => p.kw)) };
     } else if (key === "today") {
       const [v, u] = energy(rt.day_kwh), peak = peakOf(ctx);
-      item = { icon: "🌤️", tint: tint("amber"), label: T("Proizvodnja danas"), value: v, unit: u,
+      item = { icon: Icons.get("sun_cloud"), tint: tint("amber"), label: T("Proizvodnja danas"), value: v, unit: u,
         sub: peak ? T("vrh {kw} kW u {time}", { kw: fmt(peak.kw, 1), time: UI.hhmm(peak.t) }) : T("danas još nema proizvodnje"), spark: thin(ctx.curve.map((p) => p.kw)) };
     } else if (key === "month") {
       const [v, u] = energy(rt.month_kwh);
-      item = { icon: "☀️", tint: tint("amber"), label: T("Proizvodnja ovaj mjesec"), value: v, unit: u, sub: delta(ctx.monthDelta) || T("od početka mjeseca"), spark: bars };
+      item = { icon: Icons.get("sun"), tint: tint("amber"), label: T("Proizvodnja ovaj mjesec"), value: v, unit: u, sub: delta(ctx.monthDelta) || T("od početka mjeseca"), spark: bars };
     } else if (key === "co2") {
       const [v, u] = mass(rt.month_kwh * factor);
       const monthStart = new Date(ctx.today.getFullYear(), ctx.today.getMonth(), 1);
       let acc = 0;
       const cum = ctx.daily.filter((d) => d.date >= monthStart).map((d) => (acc += d.kwh * factor));
-      item = { icon: "🌍", tint: tint("sky"), label: T("Manje CO₂ ovaj mjesec"), value: v, unit: u,
+      item = { icon: Icons.get("globe"), tint: tint("sky"), label: T("Manje CO₂ ovaj mjesec"), value: v, unit: u,
         sub: delta(ctx.monthDelta) || T("{factor} kg CO₂ po kWh", { factor: fmt(factor, 2) }), spark: cum };
     } else if (key === "year") {
       const [thisY, lastY] = ctx.year, [v, u] = energy(thisY);
-      item = { icon: "🗓️", tint: tint("green"), label: T("Proizvodnja {year}.", { year: ctx.today.getFullYear() }), value: v, unit: u,
+      item = { icon: Icons.get("calendar_year"), tint: tint("green"), label: T("Proizvodnja {year}.", { year: ctx.today.getFullYear() }), value: v, unit: u,
         sub: delta(pctChange(thisY, lastY), T("u odnosu na isto razdoblje lani")) || T("od 1. siječnja"), spark: ctx.monthly.slice(-12).map((m) => m.kwh) };
     } else if (key === "total") {
       const [v, u] = energy(rt.total_kwh);
       let acc = 0;
-      item = { icon: "⚡", tint: tint("green"), label: T("Ukupno proizvedeno"), value: v, unit: u, sub: T("od puštanja u rad {date}", { date: esc(s.commissioned) }),
+      item = { icon: Icons.get("bolt"), tint: tint("green"), label: T("Ukupno proizvedeno"), value: v, unit: u, sub: T("od puštanja u rad {date}", { date: esc(s.commissioned) }),
         spark: bars.map((b) => (acc += b)) };
     } else if (key === "grid") {
       const load = rt.load_kw, loads = ctx.curve.map((p) => p.load).filter((v) => v != null);
@@ -83,7 +83,7 @@ const Widgets = (() => {
         value = fmt(load, 2);
         sub = statusDot(true) + T("Uživo s mjerača") + (loads.length ? T(" · danas najviše {kw} kW", { kw: fmt(Math.max(...loads), 1) }) : "");
       }
-      item = { icon: "🔌", tint: tint("amber"), label: T("Potrošnja iz mreže"), value, unit: "kW", sub, spark: thin(loads) };
+      item = { icon: Icons.get("plug"), tint: tint("amber"), label: T("Potrošnja iz mreže"), value, unit: "kW", sub, spark: thin(loads) };
     } else {
       const load = rt.load_kw;
       let value = "—", sub = meterMissing(s);
@@ -93,7 +93,7 @@ const Widgets = (() => {
         value = fmt(share, 0);
         sub = T("struje zgrade sada daje sunce · zgrada troši {kw} kW", { kw: fmt(load, 1) });
       }
-      item = { icon: "🏠", tint: tint("green"), label: T("Udio sunca u potrošnji"), value, unit: value !== "—" ? "%" : "", sub, spark: null };
+      item = { icon: Icons.get("home"), tint: tint("green"), label: T("Udio sunca u potrošnji"), value, unit: value !== "—" ? "%" : "", sub, spark: null };
     }
     item.color = UI.theme().BRAND_GREEN;
     if (!spark) item.spark = null;
@@ -156,19 +156,19 @@ const Widgets = (() => {
 
   function flowNodes(ctx) {
     const rt = ctx.rt, stale = ctx.stale;
-    const nodes = [{ pos: "tl", icon: UI.SOLAR_PANEL_ICON, label: T("Solarna proizvodnja"), value: stale ? "—" : `${fmt(ctx.power, 2)} kW` },
-      { pos: "bl", icon: "⚡", label: T("Ukupna potrošnja el. energije"), value: stale || rt.load_kw == null ? "—" : `${fmt(rt.load_kw, 2)} kW` }];
+    const nodes = [{ pos: "tl", icon: UI.panelIcon(), label: T("Solarna proizvodnja"), value: stale ? "—" : `${fmt(ctx.power, 2)} kW` },
+      { pos: "bl", icon: Icons.get("bolt"), label: T("Ukupna potrošnja el. energije"), value: stale || rt.load_kw == null ? "—" : `${fmt(rt.load_kw, 2)} kW` }];
     if (rt.load_kw != null && !stale) {
       // očitanje mjerača umanjeno za proizvodnju; negativna razlika = višak u mrežu
       const net = rt.load_kw - ctx.power;
-      const [label, icon] = net >= 0 ? [T("Trenutna potrošnja električne energije"), "🏢"] : [T("Predaja u mrežu"), "🗼"];
+      const [label, icon] = net >= 0 ? [T("Trenutna potrošnja električne energije"), Icons.get("building")] : [T("Predaja u mrežu"), Icons.get("tower")];
       nodes.push({ pos: "tr", icon, label, value: `${fmt(Math.abs(net), 2)} kW`, reverse: net < 0 });
     } else {
       const [v, u] = energy(rt.month_kwh);
-      nodes.push({ pos: "tr", icon: "📈", label: T("Proizvedeno ovaj mjesec"), value: `${v} ${u}` });
+      nodes.push({ pos: "tr", icon: Icons.get("chart"), label: T("Proizvedeno ovaj mjesec"), value: `${v} ${u}` });
     }
     const [cv, cu] = mass(rt.day_kwh * ctx.settings.co2_factor);
-    nodes.push({ pos: "br", icon: "🌱", label: T("Manje CO₂ danas"), value: `${cv} ${cu}` });
+    nodes.push({ pos: "br", icon: Icons.get("sprout"), label: T("Manje CO₂ danas"), value: `${cv} ${cu}` });
     return nodes;
   }
   const flow = (ctx, p, h) => ({ flow: { nodes: flowNodes(ctx), live: Boolean(ctx.rt.running), height: h } });
@@ -177,17 +177,17 @@ const Widgets = (() => {
     const rec = ctx.records || {}, items = [];
     if (rec.best_day) {
       const d = parseDate(rec.best_day[0]), [v, u] = energy(rec.best_day[1]);
-      items.push({ icon: "🏆", tint: tint("amber"), label: T("Najbolji dan · {date}", { date: fmtDate("date_text", d) }), value: v, unit: u });
+      items.push({ icon: Icons.get("trophy"), tint: tint("amber"), label: T("Najbolji dan · {date}", { date: fmtDate("date_text", d) }), value: v, unit: u });
     }
     if (rec.best_month) {
       const m = parseDate(rec.best_month[0]), [v, u] = energy(rec.best_month[1]);
-      items.push({ icon: "📅", tint: tint("green"), label: T("Najbolji mjesec · {month}", { month: fmtDate("month_year", m) }), value: v, unit: u });
+      items.push({ icon: Icons.get("calendar"), tint: tint("green"), label: T("Najbolji mjesec · {month}", { month: fmtDate("month_year", m) }), value: v, unit: u });
     }
     if (rec.peak_power) {
       const t = new Date(rec.peak_power[0] * 1000);
-      items.push({ icon: "⚡", tint: tint("blue"), label: T("Najveća snaga · {date}", { date: `${fmtDate("date", t)} ${UI.hhmm(t)}` }), value: fmt(rec.peak_power[1], 1), unit: "kW" });
+      items.push({ icon: Icons.get("bolt"), tint: tint("blue"), label: T("Najveća snaga · {date}", { date: `${fmtDate("date", t)} ${UI.hhmm(t)}` }), value: fmt(rec.peak_power[1], 1), unit: "kW" });
     }
-    if (rec.producing_days && p.h >= 3) items.push({ icon: "☀️", tint: tint("sky"), label: T("Dana s proizvodnjom"), value: fmt(rec.producing_days, 0), unit: T("dana") });
+    if (rec.producing_days && p.h >= 3) items.push({ icon: Icons.get("sun"), tint: tint("sky"), label: T("Dana s proizvodnjom"), value: fmt(rec.producing_days, 0), unit: T("dana") });
     if (!items.length) return { html: noData(T("Rekordi elektrane"), h, T("Još nema dovoljno podataka.")) };
     const first = rec.first_day ? parseDate(rec.first_day) : null;
     const right = first ? T("od {date}", { date: fmtDate("date", first) }) : "";
@@ -198,17 +198,17 @@ const Widgets = (() => {
   function environment(ctx, p, h) {
     const co2 = ctx.rt.total_kwh * ctx.settings.co2_factor, [mv, mu] = mass(co2);
     return { html: UI.listCard(T("Utjecaj na okoliš"), [
-      { icon: "🌳", tint: tint("green"), label: T("Posađena stabla"), value: fmt(co2 / TREE_KG_CO2_PER_YEAR, 0), unit: T("stabala") },
-      { icon: "🌍", tint: tint("sky"), label: T("Smanjena emisija CO₂"), value: mv, unit: mu },
-      { icon: "🚗", tint: tint("amber"), label: T("Ušteda u kilometrima"), value: fmt(co2 / CAR_KG_CO2_PER_KM, 0), unit: "km" },
+      { icon: Icons.get("tree"), tint: tint("green"), label: T("Posađena stabla"), value: fmt(co2 / TREE_KG_CO2_PER_YEAR, 0), unit: T("stabala") },
+      { icon: Icons.get("globe"), tint: tint("sky"), label: T("Smanjena emisija CO₂"), value: mv, unit: mu },
+      { icon: Icons.get("car"), tint: tint("amber"), label: T("Ušteda u kilometrima"), value: fmt(co2 / CAR_KG_CO2_PER_KM, 0), unit: "km" },
     ], T("od puštanja u rad {date}", { date: esc(ctx.settings.commissioned) }), h) };
   }
 
   const compact = (x) => (x >= 1e6 ? [fmt(x / 1e6, 1), T("mil.")] : x >= 1e4 ? [fmt(x / 1e3, 1), T("tis.")] : [fmt(x, 0), ""]);
   function equivalents(ctx, p, h) {
     const period = p.options.period || "month", kwh = ctx.periodKwh(period);
-    const cells = [["🏠", HOUSEHOLD_KWH_PER_DAY, T("dana opskrbe prosječnog kućanstva")], ["📱", PHONE_CHARGE_KWH, T("punjenja mobitela")],
-      ["🚘", EV_KWH_PER_KM, T("km električnim automobilom")], ["💡", LED_KWH_PER_HOUR, T("sati rada LED žarulje")]];
+    const cells = [[Icons.get("home"), HOUSEHOLD_KWH_PER_DAY, T("dana opskrbe prosječnog kućanstva")], [Icons.get("phone"), PHONE_CHARGE_KWH, T("punjenja mobitela")],
+      [Icons.get("ecar"), EV_KWH_PER_KM, T("km električnim automobilom")], [Icons.get("bulb"), LED_KWH_PER_HOUR, T("sati rada LED žarulje")]];
     const tiles = cells.map(([icon, per, label]) => { const [v, u] = compact(kwh / per);
       return `<div class="eq"><div class="i">${icon}</div><div><div class="v">${v}<small>${u}</small></div><div class="k">${esc(label)}</div></div></div>`; }).join("");
     const [ev, eu] = energy(kwh);
@@ -220,7 +220,7 @@ const Widgets = (() => {
     const keyframes = `@keyframes fact-cycle { 0% { opacity: 0; transform: translateY(6px); } ${(share * .08).toFixed(2)}% { opacity: 1; transform: none; } `
       + `${(share * .92).toFixed(2)}% { opacity: 1; transform: none; } ${share.toFixed(2)}% { opacity: 0; transform: translateY(-6px); } 100% { opacity: 0; } }`;
     const items = FACTS.map((f, i) => `<p class="fun-fact" style="animation: fact-cycle ${n * FACT_SECONDS}s linear ${i * FACT_SECONDS}s infinite">${esc(T(f))}</p>`).join("");
-    return { html: card(h, `<style>${keyframes}</style><div class="card-title"><span>💡 ${T("Znate li?")}</span><small>${T("zanimljivosti o sunčevoj energiji")}</small></div><div class="facts-body">${items}</div>`, "facts") };
+    return { html: card(h, `<style>${keyframes}</style><div class="card-title"><span>${Icons.get("bulb")} ${T("Znate li?")}</span><small>${T("zanimljivosti o sunčevoj energiji")}</small></div><div class="facts-body">${items}</div>`, "facts") };
   }
 
   const clock = (ctx, p, h) => ({ html: card(h, `<div class="time live-clock"></div><div class="date">${UI.dateHr(ctx.today)}</div>`, "clock-w") });
@@ -243,7 +243,7 @@ const Widgets = (() => {
       <line x1="6" y1="128" x2="294" y2="128" stroke="${th.MUTED}" stroke-opacity=".35"/>
       <text x="22" y="146" text-anchor="middle" font-size="12" fill="${th.MUTED}">${UI.hhmm(rise)}</text>
       <text x="278" y="146" text-anchor="middle" font-size="12" fill="${th.MUTED}">${UI.hhmm(set)}</text></svg>
-      <div class="sun-facts"><div><span>🌅 ${T("Izlazak")}</span><b>${UI.hhmm(rise)}</b></div><div><span>🌇 ${T("Zalazak")}</span><b>${UI.hhmm(set)}</b></div>
+      <div class="sun-facts"><div><span>${Icons.get("sunrise")} ${T("Izlazak")}</span><b>${UI.hhmm(rise)}</b></div><div><span>${Icons.get("sunset")} ${T("Zalazak")}</span><b>${UI.hhmm(set)}</b></div>
       <div><span>${T("Duljina dana")}</span><b>${dur((set - rise) / 1000)}</b></div><div><span>${T("Sunčanih sati")}</span><b>${fmt(day.sunshine_h || 0, 1)} h</b></div>
       <div><span>${T("UV indeks")}</span><b>${day.uv != null ? fmt(day.uv, 0) : "—"}</b></div></div></div>`, "sun-w") };
   }
@@ -256,8 +256,8 @@ const Widgets = (() => {
   function savings(ctx, p, h) {
     const sv = ctx.savings, s = ctx.settings, cur = s.currency || "€";
     if (!sv || sv.today == null) return { html: noData(T("Ušteda"), h, T("Još nema dovoljno podataka.")) };
-    const rows = [["☀️", "amber", T("Danas"), sv.today], ["📅", "green", T("Ovaj mjesec"), sv.month], ["🗓️", "sky", T("Ove godine"), sv.year]];
-    if (p.h >= 3) rows.push(["💶", "blue", T("Ukupno od {date}", { date: fmtDate("date", parseDate(sv.first_day)) }), sv.total]);
+    const rows = [[Icons.get("sun"), "amber", T("Danas"), sv.today], [Icons.get("calendar"), "green", T("Ovaj mjesec"), sv.month], [Icons.get("calendar_year"), "sky", T("Ove godine"), sv.year]];
+    if (p.h >= 3) rows.push([Icons.get("money"), "blue", T("Ukupno od {date}", { date: fmtDate("date", parseDate(sv.first_day)) }), sv.total]);
     const items = rows.map(([icon, t, label, value]) => { const [v, u] = money(value, cur); return { icon, tint: tint(t), label, value: v, unit: u }; });
     const right = sv.metered && p.w >= 4
       ? T("{price} {cur}/kWh · višak {feed} {cur}/kWh", { price: fmt(s.price_kwh, 2), feed: fmt(s.feedin_price_kwh, 2), cur })
@@ -305,7 +305,7 @@ const Widgets = (() => {
     if (!wx) return { html: noData(T("Vremenska prognoza"), h, T("Prognoza trenutno nije dostupna.")) };
     const rows = wx.days.slice(0, p.h <= 1 ? Math.min(3, 1 + forecastDays(ctx)) : 1 + forecastDays(ctx)).map((d, i) => { const w = Weather.describe(d.code);
       return `<div class="wx-row"><span class="name">${dayName(i, parseDate(d.date))}</span><span class="i">${w.icon}</span><span class="label">${esc(w.label)}</span>`
-        + `<b>${Math.round(d.tmax)}°</b><span class="muted">${Math.round(d.tmin)}°</span><span class="muted">💧 ${Math.round(d.rain_pct || 0)} %</span>`
+        + `<b>${Math.round(d.tmax)}°</b><span class="muted">${Math.round(d.tmin)}°</span><span class="muted">${Icons.get("drop")} ${Math.round(d.rain_pct || 0)} %</span>`
         + `<span class="muted">UV ${fmt(d.uv || 0, 0)}</span></div>`; }).join("");
     const now = Weather.describe(wx.code, wx.is_day);
     return { html: card(h, `<div class="card-title">${T("Vremenska prognoza")}<small>${esc(T("sada {temp} °C · {label}", { temp: fmt(wx.temperature, 0), label: now.label.toLowerCase() }))}</small></div><div class="wx-list">${rows}</div>`) };
@@ -336,7 +336,9 @@ const Widgets = (() => {
       + `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${th.TRACK}" stroke-width="12"/>`
       + `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"`
       + ` stroke-dasharray="${(c * soc / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>`
-      + `<text x="50%" y="54%" text-anchor="middle" font-size="${size / 5}" fill="${th.TEXT}">🔋</text></svg>`;
+      + (Icons.theme() !== "classic"  // neon/iconset: ugniježđeni SVG u sredini prstena; klasično: emoji kao tekst
+        ? `<svg x="${size * 0.36}" y="${size * 0.36}" width="${size * 0.28}" height="${size * 0.28}" viewBox="0 0 24 24" class="nx-ico">${Icons.svgInner("battery")}</svg></svg>`
+        : `<text x="50%" y="54%" text-anchor="middle" font-size="${size / 5}" fill="${th.TEXT}">🔋</text></svg>`);
     let state = "", cls = "";
     if (x.battery_kw != null) {
       const kw = x.battery_kw, abs = fmt(Math.abs(kw), 2);

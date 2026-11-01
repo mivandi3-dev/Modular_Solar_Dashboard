@@ -36,6 +36,7 @@ function fill(s) {
   $(".language-select").innerHTML = Object.entries(LANGUAGES).map(([c, n]) => `<option value="${c}">${esc(n)}</option>`).join("");
   $(".language-select").value = s.language;
   for (const name of ["mode", "night_mode", "forecast_days"]) $$(`input[name="${name}"]`).forEach((r) => { r.checked = r.value === String(s[name]); });
+  renderIconThemes(["neon", "iconset"].includes(s.icon_theme) ? s.icon_theme : "classic", s.theme);
   $("#source").dataset.mode = s.mode;
   document.documentElement.dataset.theme = s.theme;
   window.SolariColors.renderChoices($(".palettes"), window.SolariColors.paletteKey(s.theme, s.palette));
@@ -87,10 +88,23 @@ function showRecovery(codes) {
   });
 }
 
+// tema ikona (icons.js): odabir s primjerima ikona obje teme
+function renderIconThemes(want, uiTheme) {
+  $$('input[name="icon_theme"]').forEach((r) => { r.checked = r.value === want; });
+  const I = window.Icons;
+  if (!I) return;
+  const sample = ["sun", "sun_cloud", "rain", "bolt", "battery", "home", "chart", "globe"];
+  $$(".icon-preview").forEach((el) => {
+    I.setTheme(el.dataset.iconTheme, uiTheme === "light" ? "light" : "dark");
+    el.innerHTML = sample.map((k) => `<span>${I.get(k)}</span>`).join("");  // statične ikone iz icons.js
+  });
+  I.setTheme("classic");
+}
+
 function collect() {
   const form = {};
   $$("[data-field]").forEach((el) => { form[el.dataset.field] = el.type === "checkbox" ? el.checked : el.value; });
-  for (const name of ["mode", "night_mode", "palette", "forecast_days"]) form[name] = ($(`input[name="${name}"]:checked`) || {}).value;
+  for (const name of ["mode", "night_mode", "palette", "forecast_days", "icon_theme"]) form[name] = ($(`input[name="${name}"]:checked`) || {}).value;
   form.palette = form.palette || "dark";
   form.theme = window.SolariColors.themeOf(form.palette);  // tema je osnova palete
   return form;

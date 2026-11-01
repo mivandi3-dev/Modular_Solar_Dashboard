@@ -116,7 +116,7 @@ json to_json(const Settings& s, bool include_pin_hash) {
         {"theme", s.theme}, {"language", s.language}, {"device_type", s.device_type},
         {"inverter_units", s.inverter_units}, {"meter_export_positive", s.meter_export_positive},
         {"device_profile", s.device_profile}, {"logger_serial", s.logger_serial}, {"meter_invert", s.meter_invert},
-        {"palette", s.palette},
+        {"palette", s.palette}, {"icon_theme", s.icon_theme},
         {"weather_lat", s.weather_lat}, {"weather_lon", s.weather_lon}, {"weather_city", s.weather_city}, {"forecast_days", s.forecast_days},
         {"display_scale", s.display_scale}, {"monitor", s.monitor}, {"start_fullscreen", s.start_fullscreen},
         {"hide_idle_cursor", s.hide_idle_cursor}, {"keep_awake", s.keep_awake}, {"backup_keep_days", s.backup_keep_days},
@@ -158,6 +158,8 @@ Settings settings_from_json(const json& j) {
     read(j, "theme", s.theme);
     read(j, "palette", s.palette);
     if (!is_palette(s.palette)) s.palette.clear();
+    read(j, "icon_theme", s.icon_theme);
+    if (!is_icon_theme(s.icon_theme)) s.icon_theme = "classic";
     read(j, "language", s.language);
     read(j, "device_type", s.device_type);
     read(j, "inverter_units", s.inverter_units);
@@ -502,6 +504,8 @@ Validation validate_form(const json& form, const Settings& current, const std::v
     std::string palette = form.value("palette", current.palette);
     if (palette == "dark" || palette == "light") palette.clear();  // boje same teme
     if (!is_palette(palette)) errors["palette"] = tr("Nepoznata tema.");
+    const std::string icon_theme = form.value("icon_theme", current.icon_theme);
+    if (!is_icon_theme(icon_theme)) errors["icon_theme"] = tr("Nepoznata tema ikona.");
     const std::string profile = form.value("device_profile", current.device_profile);
     const std::string serial = trim(form.value("logger_serial", current.logger_serial));
     if (device == "vendor") {
@@ -569,6 +573,7 @@ Validation validate_form(const json& form, const Settings& current, const std::v
     merged["inverter_units"] = units.empty() ? "1" : units;
     merged["device_profile"] = profile;
     merged["palette"] = palette;
+    merged["icon_theme"] = icon_theme;
     merged["forecast_days"] = forecast_days;
     merged["weather_city"] = city;
     merged["logger_serial"] = serial;
@@ -581,6 +586,8 @@ bool is_palette(const std::string& key) {
     static const char* kPalettes[] = {"", "ocean", "forest", "sunset", "midnight", "graphite", "contrast", "paper", "sky", "sand"};
     return std::any_of(std::begin(kPalettes), std::end(kPalettes), [&](const char* p) { return key == p; });
 }
+
+bool is_icon_theme(const std::string& key) { return key == "classic" || key == "neon" || key == "iconset"; }
 
 bool is_device_type(const std::string& type) {
     return type == "logger" || type == "inverter" || type == "sunspec" || type == "fronius" || type == "vendor" ||

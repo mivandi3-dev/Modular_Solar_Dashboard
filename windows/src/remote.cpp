@@ -386,10 +386,18 @@ namespace {
 // Točan popis javnih datoteka (bez spajanja korisničkog unosa u put): ime u URL-u → datoteka u mapi web
 const std::set<std::string>& web_allowlist() {
     static const std::set<std::string> kFiles = {
-        "index.html", "bridge.js", "i18n.js", "themes.js", "colors.js", "components.js", "charts.js", "widgets.js",
+        "index.html", "bridge.js", "i18n.js", "themes.js", "colors.js", "icons.js", "components.js", "charts.js", "widgets.js",
         "dashboard.js", "pages.js", "dashboard-dark.css", "dashboard-light.css", "devices.css", "catalog.json",
         "vendor/plotly-basic.min.js", "vendor/PlusJakartaSans.ttf", "i18n/hr.json", "i18n/en.json", "i18n/de.json",
-        "i18n/es.json", "i18n/fr.json", "i18n/it.json", "i18n/ja.json", "i18n/ko.json", "i18n/tr.json", "i18n/zh.json"};
+        "i18n/es.json", "i18n/fr.json", "i18n/it.json", "i18n/ja.json", "i18n/ko.json", "i18n/tr.json", "i18n/zh.json",
+        // tema ikona "iconset" (web/icons.js, ICONSET)
+        "icons/iconset/battery.png", "icons/iconset/bolt.png", "icons/iconset/building.png", "icons/iconset/bulb.png",
+        "icons/iconset/calendar.png", "icons/iconset/calendar_year.png", "icons/iconset/chart.png", "icons/iconset/drop.png",
+        "icons/iconset/ecar.png", "icons/iconset/globe.png", "icons/iconset/greet.png", "icons/iconset/home.png",
+        "icons/iconset/money.png", "icons/iconset/panel.png", "icons/iconset/partly.png", "icons/iconset/plug.png",
+        "icons/iconset/rain.png", "icons/iconset/showers.png", "icons/iconset/sprout.png", "icons/iconset/sun.png",
+        "icons/iconset/sun_cloud.png", "icons/iconset/thermometer.png", "icons/iconset/tower.png", "icons/iconset/tree.png",
+        "icons/iconset/trophy.png", "icons/iconset/warning.png"};
     return kFiles;
 }
 

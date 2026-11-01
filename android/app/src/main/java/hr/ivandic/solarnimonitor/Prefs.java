@@ -32,6 +32,7 @@ final class Prefs {
             "^https?://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\])(:\\d{1,5})?(/[A-Za-z0-9._~/-]*)?$");
     private static final Pattern TIME = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
     // palete boja – isti popis kao PALETTES u web/colors.js ("" = boje same teme)
+    static final String[] ICON_THEMES = {"classic", "neon", "iconset"};
     static final String[] PALETTES = {"", "ocean", "forest", "sunset", "midnight", "graphite", "contrast", "paper", "sky", "sand"};
 
     private final SharedPreferences sp;
@@ -85,6 +86,7 @@ final class Prefs {
         o.put("language", language());
         o.put("theme", sp.getString("theme", "dark"));
         o.put("palette", sp.getString("palette", ""));
+        o.put("icon_theme", sp.getString("icon_theme", "classic"));
         o.put("forecast_days", sp.getInt("forecast_days", 5));
         o.put("night_mode", sp.getString("night_mode", "off"));
         o.put("night_from", sp.getString("night_from", "22:00"));
@@ -118,6 +120,8 @@ final class Prefs {
         String palette = f.optString("palette", "");
         if ("dark".equals(palette) || "light".equals(palette)) palette = "";  // boje same teme
         if (!Arrays.asList(PALETTES).contains(palette)) errors.put("palette", "Nepoznata tema.");
+        String iconTheme = f.optString("icon_theme", "classic");  // web/icons.js: classic | neon | iconset
+        if (!Arrays.asList(ICON_THEMES).contains(iconTheme)) errors.put("icon_theme", "Nepoznata tema ikona.");
         JSONObject out = new JSONObject();
         if (errors.length() > 0) {
             out.put("ok", false);
@@ -136,6 +140,7 @@ final class Prefs {
                 .putBoolean("keep_on", f.optBoolean("keep_on", true))
                 .putBoolean("start_fullscreen", f.optBoolean("start_fullscreen", true))
                 .putString("palette", palette)
+                .putString("icon_theme", iconTheme)
                 .putInt("forecast_days", days);
         e.remove("api_key_enc").apply();  // API ključ (do 2.x) više se ne koristi
         out.put("ok", true);
