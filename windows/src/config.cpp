@@ -8,7 +8,9 @@
 #include <regex>
 #include <sstream>
 
+#include "crypto.hpp"
 #include "i18n.hpp"
+#include "mailer.hpp"
 #include "secret.hpp"
 #include "serial.hpp"
 #include "util.hpp"
@@ -24,6 +26,7 @@ const char* const kScales[] = {"auto", "fhd", "2k", "4k"};
 const char* const kThemes[] = {"dark", "light"};
 const char* const kNightModes[] = {"off", "dim", "screen_off"};
 const char* const kSmtpSecurity[] = {"starttls", "ssl", "none"};
+const char* const kMailProviders[] = {"resend", "smtp"};
 
 template <size_t N>
 bool one_of(const std::string& v, const char* const (&list)[N]) {
@@ -123,6 +126,7 @@ json to_json(const Settings& s, bool include_pin_hash) {
         {"price_kwh", s.price_kwh}, {"feedin_price_kwh", s.feedin_price_kwh}, {"currency", s.currency},
         {"night_mode", s.night_mode}, {"night_from", s.night_from}, {"night_to", s.night_to},
         {"remote_view", s.remote_view}, {"remote_port", s.remote_port}, {"remote_view_key_enc", s.remote_view_key_enc}, {"alert_emails", s.alert_emails},
+        {"mail_provider", s.mail_provider}, {"resend_api_key_enc", s.resend_api_key_enc},
         {"smtp_host", s.smtp_host}, {"smtp_port", s.smtp_port}, {"smtp_security", s.smtp_security},
         {"smtp_user", s.smtp_user}, {"smtp_password_enc", s.smtp_password_enc}, {"smtp_from", s.smtp_from},
         {"alert_offline_min", s.alert_offline_min}, {"alert_low_production", s.alert_low_production},
@@ -195,6 +199,11 @@ Settings settings_from_json(const json& j) {
     read(j, "smtp_user", s.smtp_user);
     read(j, "smtp_password_enc", s.smtp_password_enc);
     read(j, "smtp_from", s.smtp_from);
+    read(j, "resend_api_key_enc", s.resend_api_key_enc);
+    // postavke iz 3.x/4.0 bez polja: tko je imao SMTP poslužitelj, ostaje na njemu
+    s.mail_provider = j.is_object() && j.contains("mail_provider") ? j.value("mail_provider", std::string{})
+                      : (s.smtp_host.empty() ? "resend" : "smtp");
+    if (!one_of(s.mail_provider, kMailProviders)) s.mail_provider = "resend";
     read(j, "alert_offline_min", s.alert_offline_min);
     read(j, "alert_low_production", s.alert_low_production);
     read(j, "alert_fault", s.alert_fault);
@@ -228,7 +237,7 @@ bool valid_host_name(const std::string& host) {
 bool is_configured() { return fs::exists(config_file()); }
 
 const std::vector<std::string>& secret_keys() {
-    static const std::vector<std::string> keys = {"smtp_password_enc", "cloud_token_enc", "cloud_account_enc", "remote_view_key_enc",
+    static const std::vector<std::string> keys = {"smtp_password_enc", "resend_api_key_enc", "cloud_token_enc", "cloud_account_enc", "remote_view_key_enc",
                                                   "settings_pin_hash"};
     return keys;
 }
@@ -354,6 +363,7 @@ std::optional<Settings> legacy_settings() {
 json to_form(const Settings& s) {
     json j = to_json(s, false);
     j.erase("smtp_password_enc");
+    j.erase("resend_api_key_enc");
     j.erase("cloud_token_enc");
     j.erase("remote_view_key_enc");
     j.erase("cloud_account_enc");
@@ -361,6 +371,7 @@ json to_form(const Settings& s) {
     j["cloud_account"] = !s.cloud_token_enc.empty() && account.is_object() ? account : json(nullptr);
     j["pin_set"] = !s.settings_pin_hash.empty();
     j["smtp_password_set"] = !s.smtp_password_enc.empty();
+    j["resend_api_key_set"] = !s.resend_api_key_enc.empty();
     return j;
 }
 
@@ -538,9 +549,22 @@ Validation validate_form(const json& form, const Settings& current, const std::v
     }
     s.alert_emails.clear();
     for (const auto& e : emails.value_or(std::vector<std::string>{})) s.alert_emails += (s.alert_emails.empty() ? "" : ", ") + e;
-    if (!s.alert_emails.empty() && s.smtp_host.empty()) {
+    s.mail_provider = form.value("mail_provider", current.mail_provider);
+    if (!one_of(s.mail_provider, kMailProviders)) errors["mail_provider"] = tr("Nepoznat način slanja e-pošte.");
+    if (std::string key = trim(form.value("resend_api_key", std::string{})); !key.empty()) {
+        if (valid_resend_key(key)) s.resend_api_key_enc = protect_secret(key);
+        else errors["resend_api_key"] = tr("API ključ servisa Resend nije ispravan (počinje s re_).");
+        wipe(key);
+    }
+    if (form.value("resend_api_key_clear", false)) s.resend_api_key_enc.clear();
+    if (s.mail_provider == "resend") {
+        if (!s.alert_emails.empty() && s.resend_api_key_enc.empty() && !errors.count("resend_api_key")) {
+            errors["resend_api_key"] = tr("Upišite API ključ servisa Resend.");
+        }
+    } else if (!s.alert_emails.empty() && s.smtp_host.empty()) {
         errors["smtp_host"] = tr("Obavezno polje.");
-    } else if (!s.smtp_host.empty() && !valid_host_name(s.smtp_host)) {
+    }
+    if (!s.smtp_host.empty() && !valid_host_name(s.smtp_host)) {
         errors["smtp_host"] = tr("Upišite naziv ili IP adresu poslužitelja e-pošte.");
     }
     if (!s.smtp_from.empty() && !parse_recipients(s.smtp_from)) {
@@ -585,6 +609,10 @@ bool is_palette(const std::string& key) {
     // isti popis kao PALETTES u web/colors.js (dark i light su boje same teme, spremaju se kao "")
     static const char* kPalettes[] = {"", "ocean", "forest", "sunset", "midnight", "graphite", "contrast", "paper", "sky", "sand"};
     return std::any_of(std::begin(kPalettes), std::end(kPalettes), [&](const char* p) { return key == p; });
+}
+
+bool mail_configured(const Settings& s) {
+    return s.mail_provider == "resend" ? !s.resend_api_key_enc.empty() : !s.smtp_host.empty();
 }
 
 bool is_icon_theme(const std::string& key) { return key == "classic" || key == "neon" || key == "iconset"; }

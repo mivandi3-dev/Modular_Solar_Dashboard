@@ -80,6 +80,9 @@ struct Settings {
     std::string remote_view_key_enc;  // 4.0 (SMA-08): pristupni ključ pregleda iz mreže (DPAPI)
     // obavijesti e-poštom (šalje ih poller): adrese odvojene zarezom
     std::string alert_emails;
+    // 4.0: "resend" = servis Resend (api.resend.com, ključ ispod), "smtp" = vlastiti poslužitelj e-pošte
+    std::string mail_provider = "resend";
+    std::string resend_api_key_enc;  // DPAPI (src/secret.cpp), nikad u čistom tekstu ni u obrascu
     std::string smtp_host;
     int smtp_port = 587;
     std::string smtp_security = "starttls";  // starttls | ssl | none
@@ -112,7 +115,8 @@ bool valid_host_name(const std::string& host);  // IPv4 ili naziv (bez razmaka, 
 Settings load_settings();  // config.json + secrets\secrets.json (ako je čitljiva)
 // atomično; tajne (secret_keys) idu u secrets\secrets.json, config.json i config.json.bak su bez njih
 void save_settings(const Settings& s);
-const std::vector<std::string>& secret_keys();  // smtp_password_enc, cloud_*_enc, remote_view_key_enc, settings_pin_hash
+bool mail_configured(const Settings& s);  // slanje je podešeno: Resend ključ ili SMTP poslužitelj (primatelji: postavke + korisnici)
+const std::vector<std::string>& secret_keys();  // smtp_password_enc, resend_api_key_enc, cloud_*_enc, remote_view_key_enc, settings_pin_hash
 fs::path secrets_file();
 json strip_secrets(json j);
 // samo secrets.json (npr. PIN iz instalacije – config.json se ne stvara, pa čarobnjak ostaje)

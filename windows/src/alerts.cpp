@@ -2,10 +2,14 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <map>
+#include <mutex>
 
+#include "crypto.hpp"
 #include "i18n.hpp"
+#include "mailer.hpp"
 #include "net.hpp"
 #include "secret.hpp"
 #include "system.hpp"
@@ -56,6 +60,8 @@ std::string header_utf8(const std::string& text) {  // RFC 2047 za naslov s kva�
     return "=?UTF-8?B?" + base64(std::vector<uint8_t>(text.begin(), text.end())) + "?=";
 }
 
+}  // namespace
+
 fs::path temp_file(const wchar_t* ext) {
     wchar_t dir[MAX_PATH], name[MAX_PATH];
     GetTempPathW(MAX_PATH, dir);
@@ -66,15 +72,10 @@ fs::path temp_file(const wchar_t* ext) {
     return p.replace_extension(ext);
 }
 
-struct TempFiles {
-    std::vector<fs::path> paths;
-    ~TempFiles() {
-        std::error_code ec;
-        for (const auto& p : paths) fs::remove(p, ec);
-    }
-};
-
-}  // namespace
+TempFiles::~TempFiles() {
+    std::error_code ec;
+    for (const auto& p : paths) fs::remove(p, ec);
+}
 
 std::string curl_config_value(const std::string& v) {
     std::string out = "\"";
@@ -217,11 +218,72 @@ void save_alert_state(const AlertState& st) {
     write_file_atomic(service_dir() / L"alerts.json", j.dump());
 }
 
+namespace {
+std::mutex g_extra_mutex;
+std::function<std::vector<std::string>()> g_extra_recipients;
+
+std::string lower_ascii(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+std::vector<std::string> extra_recipients() {
+    std::function<std::vector<std::string>()> provider;
+    {
+        std::lock_guard lock(g_extra_mutex);
+        provider = g_extra_recipients;
+    }
+    if (!provider) return {};
+    try {
+        return provider();
+    } catch (const std::exception& e) {
+        log_warn(std::string("Adrese korisnika za obavijesti nisu dostupne: ") + e.what());
+        return {};
+    }
+}
+}  // namespace
+
+void set_mail_extra_recipients(std::function<std::vector<std::string>()> provider) {
+    std::lock_guard lock(g_extra_mutex);
+    g_extra_recipients = std::move(provider);
+}
+
+std::vector<std::string> merge_recipients(const std::vector<std::string>& configured, const std::vector<std::string>& extra) {
+    std::vector<std::string> out, seen;
+    for (const auto* list : {&configured, &extra}) {
+        for (const auto& r : *list) {
+            const std::string key = lower_ascii(trim(r));
+            if (key.empty() || !parse_recipients(r) || std::find(seen.begin(), seen.end(), key) != seen.end()) continue;
+            if (out.size() >= kResendBatchMax) return out;
+            seen.push_back(key);
+            out.push_back(trim(r));
+        }
+    }
+    return out;
+}
+
 std::vector<std::string> send_mail(const Settings& s, const std::string& subj, const std::string& body,
                                    const std::optional<std::string>& password) {
     std::string bad;
-    const auto recipients = parse_recipients(s.alert_emails, &bad);
-    if (!recipients) throw MailError(tr("Neispravna adresa e-pošte: {address}", {{"address", bad}}));
+    const auto configured = parse_recipients(s.alert_emails, &bad);
+    if (!configured) throw MailError(tr("Neispravna adresa e-pošte: {address}", {{"address", bad}}));
+    const auto all = std::optional(merge_recipients(*configured, extra_recipients()));
+    if (s.mail_provider == "resend") {
+        if (all->empty()) throw MailError(tr("Upišite barem jednu adresu primatelja."));
+        std::string key = password.value_or(resend_key(s));
+        if (key.empty()) {
+            throw MailError(tr("Slanje e-pošte nije podešeno (Postavke → Obavijesti → API ključ servisa Resend)."));
+        }
+        try {
+            resend_send(s, key, kMailFromAlerts, *all, alert_mail(subj, body, s.plant_name), true);
+        } catch (...) {
+            wipe(key);
+            throw;
+        }
+        wipe(key);
+        return *all;
+    }
+    const auto& recipients = all;
     if (recipients->empty() || s.smtp_host.empty()) throw MailError(tr("Upišite SMTP poslužitelj i barem jednu adresu primatelja."));
     const std::string sender = !s.smtp_from.empty() ? s.smtp_from : !s.smtp_user.empty() ? s.smtp_user : recipients->front();
     // Provjera prije svega: config.json može biti ručno izmijenjen (novi red = nova curl opcija ili zaglavlje poruke)

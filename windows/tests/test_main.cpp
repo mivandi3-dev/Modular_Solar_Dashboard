@@ -153,6 +153,30 @@ TEST_CASE("postavke: tema ikona (classic | neon | iconset)") {
     CHECK(validate_form(f, cur, kIfaces).settings->icon_theme == "iconset");
 }
 
+TEST_CASE("obrazac: slanje e-pošte preko servisa Resend") {
+    json f = valid_form();
+    f["alert_emails"] = "ana@firma.hr";
+    f["mail_provider"] = "resend";
+    CHECK(validate_form(f, Settings{}, kIfaces).errors.count("resend_api_key") == 1);  // adrese bez ključa
+    f["resend_api_key"] = "sk_nije_resend";
+    CHECK(validate_form(f, Settings{}, kIfaces).errors.count("resend_api_key") == 1);
+    f["resend_api_key"] = " re_TESTKEY12345_abc ";
+    const auto v = validate_form(f, Settings{}, kIfaces);
+    REQUIRE(v.errors.empty());
+    CHECK(v.settings->mail_provider == "resend");
+    CHECK(v.settings->resend_api_key_enc.rfind("dpapi2:", 0) == 0);  // nikad u čistom tekstu
+    CHECK(v.settings->resend_api_key_enc.find("TESTKEY") == std::string::npos);
+    f.erase("resend_api_key");  // prazno polje → spremljeni ključ ostaje
+    CHECK(validate_form(f, *v.settings, kIfaces).settings->resend_api_key_enc == v.settings->resend_api_key_enc);
+    f["resend_api_key_clear"] = true;
+    CHECK(validate_form(f, *v.settings, kIfaces).errors.count("resend_api_key") == 1);
+    f.erase("resend_api_key_clear");
+    f["mail_provider"] = "smtp";  // SMTP i dalje traži poslužitelj
+    CHECK(validate_form(f, Settings{}, kIfaces).errors.count("smtp_host") == 1);
+    f["mail_provider"] = "golub";
+    CHECK(validate_form(f, Settings{}, kIfaces).errors.count("mail_provider") == 1);
+}
+
 TEST_CASE("obrazac: naslov u zaglavlju") {
     json f = valid_form();
     f["headline"] = "Naša elektrana";
@@ -338,6 +362,7 @@ TEST_CASE("adrese e-pošte i obrazac obavijesti") {
     cur.logger_interface = "Ethernet";
     json form = to_form(cur);
     form["alert_emails"] = "a@x.hr";
+    form["mail_provider"] = "smtp";  // vlastiti poslužitelj e-pošte traži adresu poslužitelja
     form["smtp_host"] = "";
     form["night_from"] = "25:00";
     const auto v = validate_form(form, cur, {"Ethernet"});

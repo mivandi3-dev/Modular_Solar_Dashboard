@@ -458,6 +458,7 @@ Settings App::settings_from_broker(const json& state) {
     // samo oznake za obrazac (pin_set, smtp_password_set) – stvarni hash i lozinku ima samo broker
     s.settings_pin_hash = state.value("pin_set", false) ? "broker" : "";
     s.smtp_password_enc = state.value("smtp_password_set", false) ? "broker" : "";
+    s.resend_api_key_enc = state.value("resend_api_key_set", false) ? "broker" : "";
     return s;
 }
 

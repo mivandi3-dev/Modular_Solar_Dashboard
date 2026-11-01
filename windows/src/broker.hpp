@@ -84,5 +84,8 @@ std::string broker_home_problem();
 
 // Instalacija (administrator): PIN iz datoteke (prvi redak, 4–8 znamenki); datoteka se poslije briše.
 int set_pin_from_file(const fs::path& file);
+// Administrator: API ključ servisa Resend iz datoteke (prvi redak) → postavke (DPAPI), način slanja "resend"; datoteka se
+// briše odmah nakon čitanja. 0 = u redu, 2 = nema datoteke, 3 = neispravan ključ, 4 = spremanje nije uspjelo.
+int set_resend_key_from_file(const fs::path& file);
 
 }  // namespace sm

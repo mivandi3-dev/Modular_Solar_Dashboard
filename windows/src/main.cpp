@@ -33,6 +33,17 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmdline, int) {
     }
 #endif
     if (std::wstring(cmdline).find(L"--poller") != std::wstring::npos) return run_poller_mode();
+    // 4.0: administrator postavlja API ključ servisa Resend: --set-resend-key-file "<datoteka>" (datoteka se briše)
+    if (std::wstring(cmdline).find(L"--set-resend-key-file") != std::wstring::npos) {
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        int code = 2;
+        for (int i = 1; argv && i + 1 < argc; ++i) {
+            if (std::wstring(argv[i]) == L"--set-resend-key-file") code = set_resend_key_from_file(argv[i + 1]);
+        }
+        if (argv) LocalFree(argv);
+        return code;
+    }
     // 4.0 (SMA-02): instalacija (administrator) postavlja PIN postavki: --set-pin-file "<datoteka>" (datoteka se briše)
     if (std::wstring(cmdline).find(L"--set-pin-file") != std::wstring::npos) {
         int argc = 0;

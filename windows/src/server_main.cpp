@@ -5,6 +5,7 @@
 // Podaci su u %ProgramData%\SolarniServer (ili SOLARI2_HOME) – odvojeno od klijenta na istom računalu.
 #include <windows.h>
 #include <objbase.h>
+#include <shellapi.h>
 #include <shobjidl.h>
 
 #include <cstdlib>
@@ -12,6 +13,7 @@
 
 #include "api.hpp"
 #include "app.hpp"
+#include "broker.hpp"
 #include "i18n.hpp"
 #include "poller.hpp"
 #include "system.hpp"
@@ -33,6 +35,18 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmdline, int) {
     }
     set_poller_mutex(kServerPollerMutex);
     if (std::wstring(cmdline).find(L"--service") != std::wstring::npos) return run_server_service();
+    // 4.0: administrator postavlja API ključ servisa Resend: --set-resend-key-file "<datoteka>" (datoteka se briše)
+    if (std::wstring(cmdline).find(L"--set-resend-key-file") != std::wstring::npos) {
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        int code = 2;
+        for (int i = 1; argv && i + 1 < argc; ++i) {
+            if (std::wstring(argv[i]) == L"--set-resend-key-file") code = set_resend_key_from_file(argv[i + 1]);
+        }
+        if (argv) LocalFree(argv);
+        return code;
+    }
+
 
     NamedMutex single(L"Local\\SolarniServerApp");
     if (!single.owned()) {

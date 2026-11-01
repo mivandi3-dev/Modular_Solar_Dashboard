@@ -8,8 +8,11 @@
 #include <cmath>
 #include <regex>
 
+#include "alerts.hpp"
 #include "crypto.hpp"
 #include "i18n.hpp"
+#include "mailer.hpp"
+#include "net.hpp"
 #include "secret.hpp"
 #include "smartlogger_export.hpp"
 #include "storage.hpp"
@@ -134,6 +137,7 @@ json BrokerCore::state(const Settings& s) const {
             {"pin_set", !s.settings_pin_hash.empty()},
             {"locked_s", locked_until_ > t ? locked_until_ - t : 0},
             {"smtp_password_set", !s.smtp_password_enc.empty()},
+            {"resend_api_key_set", !s.resend_api_key_enc.empty()},
             {"configured", is_configured()},
             // tajne koje sučelje treba (DPAPI računala): prijava na poslužitelj i ključ pregleda iz mreže; SMTP lozinka ne
             {"secrets", {{"cloud_token_enc", s.cloud_token_enc}, {"cloud_account_enc", s.cloud_account_enc},
@@ -190,6 +194,34 @@ json BrokerCore::handle(const json& request, const std::wstring& caller_sid) {
         return {{"ok", true}};
     }
     if (*op == "save_settings") return save_form(request, caller_sid);
+    if (*op == "test_email") {
+        if (auto e = check_pin(request, s)) return *e;
+        const auto form = request.find("form");
+        if (form == request.end() || !form->is_object()) return bad_request();
+        const auto v = validate_form(*form, s, interfaces_ ? interfaces_() : std::vector<std::string>{});
+        const Settings& t = v.settings ? *v.settings : s;  // ostale greške obrasca ne sprječavaju probnu poruku
+        for (const char* key : {"alert_emails", "smtp_host", "smtp_port", "smtp_from", "smtp_user", "mail_provider", "resend_api_key"}) {
+            if (v.errors.count(key)) {
+                json errors = json::object();
+                for (const auto& [k, msg] : v.errors) errors[k] = msg;
+                return fail("invalid", tr("Provjerite označena polja."), {{"errors", errors}});
+            }
+        }
+        std::string secret = form->value(t.mail_provider == "resend" ? "resend_api_key" : "smtp_password", std::string{});
+        try {
+            NetInit net;
+            const auto m = test_message(t, clock_());
+            const auto to = send_mail(t, m.subject, m.body, secret.empty() ? std::nullopt : std::optional(secret));
+            wipe(secret);
+            std::string list;
+            for (const auto& r : to) list += (list.empty() ? "" : ", ") + r;
+            log_info("Broker: probna poruka (" + narrow(caller_sid) + ")");
+            return {{"ok", true}, {"message", tr("Probna poruka poslana na: {to}", {{"to", list}})}};
+        } catch (const std::exception& e) {
+            wipe(secret);
+            return fail("mail", e.what());
+        }
+    }
     if (*op == "cloud_login") return store_cloud_login(request);
     if (*op == "import_rows") return import_rows(request);
     if (*op == "import_days") return import_days(request);
@@ -354,6 +386,33 @@ int set_pin_from_file(const fs::path& file) {
     }
     wipe(pin);
     log_info("PIN postavki postavljen (instalacija)");
+    return 0;
+}
+
+int set_resend_key_from_file(const fs::path& file) {
+    auto text = read_file(file);
+    std::error_code ec;
+    fs::remove(file, ec);
+    if (!text) return 2;
+    if (text->rfind("\xEF\xBB\xBF", 0) == 0) text->erase(0, 3);  // UTF-8 BOM (Bilježnica)
+    std::string key = trim(text->substr(0, text->find_first_of("\r\n")));
+    wipe(*text);
+    if (!valid_resend_key(key)) {
+        wipe(key);
+        return 3;
+    }
+    try {
+        Settings s = load_settings();
+        s.resend_api_key_enc = protect_secret(key);
+        s.mail_provider = "resend";
+        save_settings(s);
+    } catch (const std::exception& e) {
+        wipe(key);
+        log_error(std::string("API ključ servisa Resend nije spremljen: ") + e.what());
+        return 4;
+    }
+    wipe(key);
+    log_info("API ključ servisa Resend postavljen (administrator)");
     return 0;
 }
 

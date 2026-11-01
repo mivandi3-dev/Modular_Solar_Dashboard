@@ -51,6 +51,7 @@ body:not(.wizard) nav button i { display: none; }
 body:not(.wizard) .wizard-only { display: none !important; }
 body.wizard .settings-only { display: none !important; }
 body:not(.server-role) .server-only, body.server-role .client-only, body:not(.has-cloud) .cloud-only { display: none !important; }
+#alerts-panel[data-provider="resend"] .smtp-fields, #alerts-panel[data-provider="smtp"] .resend-fields { display: none !important; }
 #network-panel[data-source="cloud"] .local-only, #network-panel[data-source="local"] .cloud-fields { display: none !important; }
 .cloud-fields.fields { margin-top: 14px; }
 .key-row { display: flex; gap: 8px; align-items: center; }

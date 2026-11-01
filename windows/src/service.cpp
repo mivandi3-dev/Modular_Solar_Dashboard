@@ -68,7 +68,7 @@ int run_server_service() {
             std::lock_guard lock(settings_mutex);
             s = settings;
         }
-        if (s.alert_emails.empty() || s.smtp_host.empty()) return;
+        if (!mail_configured(s)) return;
         std::thread([s, message] {
             try {
                 send_mail(s, "Solarni poslužitelj: sumnjive prijave", message);
@@ -76,6 +76,14 @@ int run_server_service() {
                 log_error(std::string("Upozorenje o prijavama nije poslano: ") + e.what());
             }
         }).detach();
+    });
+    // obavijesti stižu i administratorima poslužitelja (uz adrese iz postavki); spremište korisnika živi do kraja procesa
+    set_mail_extra_recipients([store = users.get()] {
+        std::vector<std::string> out;
+        for (const auto& u : store->list()) {
+            if (u.role == Role::Admin && !u.disabled && !u.activation_pending) out.push_back(u.email);
+        }
+        return out;
     });
     set_language(settings.language);
     std::time_t stamp = config_stamp();

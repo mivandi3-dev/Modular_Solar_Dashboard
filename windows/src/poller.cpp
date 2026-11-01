@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "alerts.hpp"
+#include "secret.hpp"
 #include "broker.hpp"
 #include "fronius.hpp"
 #include "modbus.hpp"
@@ -36,7 +37,7 @@ public:
     }
 
     void process(const Settings& s, const PlantReading* p, const std::string& error) {
-        if (s.smtp_host.empty() || trim(s.alert_emails).empty()) return;
+        if (!mail_configured(s)) return;
         const std::time_t t = now();
         if (p) last_ok_ = t;
         Observation obs{t, p != nullptr, last_ok_};
@@ -351,6 +352,14 @@ int run_poller_mode() {
             log_error(std::string("Premještanje tajni nije uspjelo: ") + e.what());
         }
     }
+    // klijent: obavijesti stižu i na e-poštu računa kojim je aplikacija prijavljena na Solarni poslužitelj
+    set_mail_extra_recipients([] {
+        const Settings s = load_settings();
+        if (s.data_source != "cloud" || s.cloud_account_enc.empty()) return std::vector<std::string>{};
+        const json account = json::parse(unprotect_secret(s.cloud_account_enc), nullptr, false);
+        const std::string email = account.is_object() ? account.value("email", std::string{}) : std::string{};
+        return email.empty() ? std::vector<std::string>{} : std::vector<std::string>{email};
+    });
     std::unique_ptr<BrokerServer> broker;
     if (const std::string problem = broker_home_problem(); !problem.empty()) {
         log_error("Broker postavki se ne pokreće: " + problem + " (popravite instalacijom)");

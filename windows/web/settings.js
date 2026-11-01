@@ -92,6 +92,11 @@ function fill(s) {
   $("#smtp_password").value = "";
   $("#smtp_password").placeholder = s.smtp_password_set ? "••••••••" : "";
   $("#smtp-password-hint").textContent = s.smtp_password_set ? T("spremljena – ostavite prazno da ostane ista") : "";
+  $$('input[name="mail_provider"]').forEach((r) => { r.checked = r.value === (s.mail_provider || "resend"); });
+  $("#alerts-panel").dataset.provider = s.mail_provider || "resend";
+  $("#resend_api_key").value = "";
+  $("#resend_api_key").placeholder = s.resend_api_key_set ? "••••••••" : "re_…";
+  $("#resend-key-hint").textContent = s.resend_api_key_set ? T("spremljen – ostavite prazno da ostane isti") : "";
   renderPalettes(s);
   renderIconThemes(s);
   showDeviceTypes(state.device_types);
@@ -279,7 +284,7 @@ function openUserDialog(u) {
   $('[data-user="role"]', root).disabled = Boolean(u && u.me);
   $('[data-user="password"]', root).value = $('[data-user="password2"]', root).value = "";
   $("#user-password-hint").textContent = u ? T("prazno = lozinka ostaje ista")
-    : T("prazno = jednokratni aktivacijski kod (vrijedi 72 sata) – prikazuje se nakon spremanja, korisnik njime postavlja svoju lozinku");
+    : T("prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku");
   $("#user-pw-admin").hidden = !(u && !u.me);
   $('[data-user="totp_required"]', root).checked = Boolean(u && u.totp_required);
   $("#user-totp-admin").hidden = !(u && u.totp_enabled);
@@ -356,7 +361,7 @@ function renderAll(s) {
 function collect() {
   const form = {};
   $$("[data-field]").forEach((el) => { form[el.dataset.field] = el.type === "checkbox" ? el.checked : el.value; });
-  ["logger_interface", "internet_interface", "display_scale", "device_type", "night_mode", "data_source", "icon_theme"].forEach((name) => {
+  ["logger_interface", "internet_interface", "display_scale", "device_type", "night_mode", "data_source", "icon_theme", "mail_provider"].forEach((name) => {
     const r = $(`input[name="${name}"]:checked`);
     form[name] = r ? r.value : "";
   });
@@ -365,6 +370,7 @@ function collect() {
   form.pin_new = $("#pin_new").value;
   form.pin_clear = $("#pin_clear").checked;
   form.smtp_password = $("#smtp_password").value;
+  form.resend_api_key = $("#resend_api_key").value.trim();
   // tema je osnova odabrane palete (Tamna/Svijetla su boje same teme)
   form.palette = selectedPalette();
   form.theme = window.SolariColors ? window.SolariColors.themeOf(form.palette) : form.palette;
@@ -374,7 +380,7 @@ function collect() {
 
 function showErrors(errors) {
   $$("[data-error]").forEach((el) => { el.textContent = errors[el.dataset.error] || ""; });
-  $$("[data-field], #pin_new, #smtp_password").forEach((el) => el.classList.toggle("invalid", Boolean(errors[el.dataset.field || el.id])));
+  $$("[data-field], #pin_new, #smtp_password, #resend_api_key").forEach((el) => el.classList.toggle("invalid", Boolean(errors[el.dataset.field || el.id])));
   const first = Object.keys(errors)[0];
   if (!first) return;
   const panel = $(`[data-error="${first}"]`)?.closest(".panel");
@@ -507,12 +513,7 @@ const actions = {
   "user-reset-password": (btn) => busy(btn, $("#user-result"), T("Spremam…"), async () => {
     const res = await api.user_reset_password(editing.id);
     if (res.users) { users = res.users; renderUsers(); editing = users.find((x) => x.id === editing.id); }
-    if (res.activation_code) {
-      const box = document.createElement("div");
-      box.innerHTML = `<code style="user-select:all;font-size:1.3em">${esc(res.activation_code)}</code>`;
-      setTimeout(() => $("#user-result").appendChild(box), 0);
-    }
-    return res;
+    return res;  // kod ide samo e-poštom korisniku – administrator ga ne vidi
   }),
   "remote-new-key": (btn) => busy(btn, $("#remote-urls"), T("Spremam…"), async () => {
     const res = await api.remote_view_new_key();
@@ -690,6 +691,7 @@ document.addEventListener("change", (e) => {
   }
   if (e.target.dataset && e.target.dataset.field === "modbus_port") renderProfileHelp();
   if (e.target.name === "data_source") $("#network-panel").dataset.source = e.target.value;
+  if (e.target.name === "mail_provider") $("#alerts-panel").dataset.provider = e.target.value;
   if (e.target.dataset && e.target.dataset.field === "server_port") renderServer();
   if (e.target.classList.contains("language-select")) changeLanguage(e.target.value);
   if (e.target.id === "report-month") { report = null; $("#report").hidden = true; $("#report-print").disabled = $("#report-csv").disabled = true; }
@@ -788,18 +790,9 @@ $("#user-form").addEventListener("submit", async (e) => {
     wipeUserForm(root);
     root.close();
     setResult($("#users-result"), res);
-    showActivationCode(res);
   }
 });
 
-// Aktivacijski kod (SMA-03) prikazuje se samo jednom – u zasebnom polju koje se lako označi i kopira
-function showActivationCode(res) {
-  if (!res || !res.activation_code) return;
-  const box = document.createElement("div");
-  box.className = "activation-code";
-  box.innerHTML = `<span>${T("Aktivacijski kod")}:</span> <code style="user-select:all;font-size:1.3em">${esc(res.activation_code)}</code>`;
-  $("#users-result").appendChild(box);
-}
 
 
 window.addEventListener("pywebviewready", start);

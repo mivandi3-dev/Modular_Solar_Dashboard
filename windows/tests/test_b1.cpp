@@ -15,6 +15,7 @@
 #include "ipc.hpp"
 #include "secret.hpp"
 #include "storage.hpp"
+#include "mailer.hpp"
 #include "users.hpp"
 #include "util.hpp"
 
@@ -437,6 +438,24 @@ TEST_CASE("SMA-02: PIN iz instalacije (--set-pin-file) – samo znamenke, datote
     CHECK_FALSE(fs::exists(f));
     CHECK(check_pin("97531", load_settings().settings_pin_hash));
     CHECK_FALSE(is_configured());
+}
+
+TEST_CASE("Resend: ključ iz datoteke (--set-resend-key-file) – provjera oblika, DPAPI, datoteka se briše") {
+    TmpHome home;
+    const fs::path f = home.dir.path / L"resend.key";
+    write_file_atomic(f, "sk_nije_resend_kljuc\r\n");
+    CHECK(set_resend_key_from_file(f) == 3);
+    CHECK_FALSE(fs::exists(f));
+    CHECK(set_resend_key_from_file(f) == 2);
+    write_file_atomic(f, "\xEF\xBB\xBFre_TESTKEY12345_abc\r\n");  // Bilježnica sprema s BOM-om
+    CHECK(set_resend_key_from_file(f) == 0);
+    CHECK_FALSE(fs::exists(f));
+    const Settings s = load_settings();
+    CHECK(s.mail_provider == "resend");
+    CHECK(resend_key(s) == "re_TESTKEY12345_abc");
+    CHECK(s.resend_api_key_enc.find("TESTKEY") == std::string::npos);
+    const auto cfg = read_file(config_file()).value_or("");
+    CHECK(cfg.find("resend_api_key_enc") == std::string::npos);  // tajna samo u secrets\secrets.json
 }
 
 // ================================================================ baza samo za čitanje i ui\ mapa

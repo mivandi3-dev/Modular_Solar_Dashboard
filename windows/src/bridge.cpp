@@ -7,6 +7,7 @@
 #include <set>
 
 #include "alerts.hpp"
+#include "mailer.hpp"
 #include "api.hpp"
 #include "api_ipc.hpp"
 #include "crypto.hpp"
@@ -264,10 +265,15 @@ int arg_int(const json& args, size_t i, int def = 0) {
 }
 
 json test_email(App& app, const json& form) {
+    if (app.broker_mode()) {  // SMA-02: spremljeni ključ ili lozinku ima samo broker – probnu poruku šalje on (uz PIN)
+        json r = app.broker({{"op", "test_email"}, {"form", form}});
+        if (!r.value("ok", false) && !r.contains("message")) r["message"] = tr("Probna poruka nije poslana.");
+        return r;
+    }
     const auto v = validate_form(form, app.settings(), interface_names());
     Settings s = app.settings();
     if (!v.settings) {
-        for (const char* key : {"alert_emails", "smtp_host", "smtp_port", "smtp_from", "smtp_user"}) {
+        for (const char* key : {"alert_emails", "smtp_host", "smtp_port", "smtp_from", "smtp_user", "mail_provider", "resend_api_key"}) {
             if (v.errors.count(key)) {
                 json errors = json::object();
                 for (const auto& [k, msg] : v.errors) errors[k] = msg;
@@ -277,7 +283,7 @@ json test_email(App& app, const json& form) {
     } else {
         s = *v.settings;  // ostala polja obrasca (npr. mrežna kartica) ne smiju spriječiti probnu poruku
     }
-    const std::string pwd = form.value("smtp_password", std::string{});
+    const std::string pwd = form.value(s.mail_provider == "resend" ? "resend_api_key" : "smtp_password", std::string{});
     try {
         const auto m = test_message(s, now());
         const auto to = send_mail(s, m.subject, m.body, pwd.empty() ? std::nullopt : std::optional(pwd));
@@ -568,10 +574,17 @@ json user_save(App& app, const json& form) {
         return {{"ok", false}, {"errors", {{"role", tr("Ne možete sami sebi oduzeti administratorska prava.")}}},
                 {"message", tr("Provjerite označena polja.")}};
     }
-    std::string code;  // aktivacijski kod novog korisnika bez lozinke – prikazuje se samo jednom
+    // aktivacijski kod novog korisnika bez lozinke ide samo e-poštom korisniku (Resend) – administrator ga ne vidi
+    const Settings settings = app.settings();
+    if (!id && in.password.empty() && resend_key(settings).empty()) {
+        return {{"ok", false}, {"errors", {{"password", tr("Upišite lozinku ili podesite slanje e-pošte (Postavke → Obavijesti → API ključ servisa Resend).")}}},
+                {"message", tr("Jednokratni kod šalje se e-poštom – slanje e-pošte nije podešeno.")}};
+    }
+    std::string code;
+    int64_t new_id = 0;
     try {
         if (id) app.users().update(id, in, now());
-        else app.users().create(in, now(), &code);
+        else new_id = app.users().create(in, now(), &code);
     } catch (const UserError& e) {
         wipe(in.password);
         return {{"ok", false}, {"errors", e.fields}, {"message", tr("Provjerite označena polja.")}};
@@ -580,12 +593,25 @@ json user_save(App& app, const json& form) {
     wipe(in.password);
     log_info(std::string("Korisnici: ") + (id ? "izmijenjen korisnik #" + std::to_string(id) : "dodan korisnik") +
              (me ? " (administrator #" + std::to_string(me->id) + ")" : ""));
+    std::string mail_message;
+    bool mail_ok = true;
+    if (!code.empty()) {
+        const auto u = app.users().get(new_id);
+        try {
+            mail_message = send_activation_mail(settings, in.email, in.first_name, code, u ? u->activation_until : now() + kActivationSeconds);
+        } catch (const std::exception& e) {
+            mail_ok = false;
+            mail_message = tr("Korisnik je dodan, ali e-poruka s kodom nije poslana: {error} Pošaljite novi kod kad slanje proradi.",
+                              {{"error", e.what()}});
+            log_error(std::string("Aktivacijski kod nije poslan: ") + e.what());
+        }
+    }
+    wipe(code);
     json r = users_list(app);
     r["message"] = id ? (new_password ? tr("Spremljeno. Nova lozinka vrijedi odmah – korisnik se mora ponovno prijaviti.") : tr("Spremljeno."))
                       : new_password ? tr("Korisnik je dodan.")
-                                     : tr("Korisnik je dodan. Aktivacijski kod (vrijedi 72 sata, prikazuje se samo sada): {code}", {{"code", code}});
-    if (!code.empty()) r["activation_code"] = code;
-    wipe(code);
+                                     : (mail_ok ? tr("Korisnik je dodan.") + " " : std::string()) + mail_message;
+    if (!mail_ok) r["mail_failed"] = true;
     return r;
 }
 
@@ -606,6 +632,12 @@ json user_set_disabled(App& app, int64_t id, bool disabled) {
 json user_reset_password(App& app, int64_t id) {
     const auto me = app.admin();
     if (me && me->id == id) return fail(tr("Svoju lozinku promijenite tako da upišete novu."));
+    const Settings settings = app.settings();
+    if (resend_key(settings).empty()) {
+        return fail(tr("Jednokratni kod šalje se e-poštom – slanje e-pošte nije podešeno (Postavke → Obavijesti → API ključ servisa Resend)."));
+    }
+    const auto user = app.users().get(id);
+    if (!user) return fail(tr("Korisnik ne postoji."));
     std::string code;
     try {
         code = app.users().issue_activation_code(id, now());
@@ -613,11 +645,21 @@ json user_reset_password(App& app, int64_t id) {
         return fail(e.what());
     }
     log_info("Korisnici: novi aktivacijski kod za korisnika #" + std::to_string(id));
-    json r = users_list(app);
-    r["message"] = tr("Novi aktivacijski kod (vrijedi 72 sata, prikazuje se samo sada): {code}. Stara lozinka i sve prijave više ne vrijede.",
-                      {{"code", code}});
-    r["activation_code"] = code;
+    std::string message;
+    bool mail_ok = true;
+    try {
+        const auto fresh = app.users().get(id);
+        message = send_activation_mail(settings, user->email, user->first_name, code,
+                                       fresh ? fresh->activation_until : now() + kActivationSeconds);
+    } catch (const std::exception& e) {
+        mail_ok = false;
+        message = tr("Novi kod nije poslan: {error}", {{"error", e.what()}});
+        log_error(std::string("Aktivacijski kod nije poslan: ") + e.what());
+    }
     wipe(code);
+    json r = users_list(app);
+    r["ok"] = mail_ok;
+    r["message"] = mail_ok ? message + " " + tr("Stara lozinka i sve prijave više ne vrijede.") : message;
     return r;
 }
 

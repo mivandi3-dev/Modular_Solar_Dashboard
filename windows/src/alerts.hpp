@@ -3,6 +3,7 @@
 // curl.exe (SMTP sa STARTTLS ili SSL) na mrežnoj kartici prema internetu.
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,16 @@ void save_alert_state(const AlertState& state);
 class MailError : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
+
+// Privremene datoteke za curl (poruka, -K konfiguracija, odgovor) – brišu se pri izlasku iz opsega
+fs::path temp_file(const wchar_t* ext);
+struct TempFiles {
+    std::vector<fs::path> paths;
+    TempFiles() = default;
+    TempFiles(const TempFiles&) = delete;
+    TempFiles& operator=(const TempFiles&) = delete;
+    ~TempFiles();
+};
 // Pošalji svim primateljima iz postavki; password nullopt = spremljena lozinka. Vraća primatelje.
 // Vrijednost u curl -K datoteci (u navodnicima). Kontrolni znak (novi red …) → MailError: inače postaje nova curl opcija.
 std::string curl_config_value(const std::string& v);
@@ -60,7 +71,15 @@ std::string curl_config_value(const std::string& v);
 std::string curl_mail_config(const Settings& s, const std::string& password, const std::string& sender,
                              const std::vector<std::string>& recipients);
 
+// Dodatni primatelji obavijesti uz adrese iz postavki – e-pošta korisnika (poslužitelj: aktivni administratori;
+// klijent: prijavljeni račun poslužitelja). Poziva se pri svakom slanju; iznimke se zapisuju i zanemaruju.
+void set_mail_extra_recipients(std::function<std::vector<std::string>()> provider);
+// Adrese iz postavki + dodatni primatelji, bez ponavljanja (bez obzira na velika i mala slova), najviše kResendBatchMax
+std::vector<std::string> merge_recipients(const std::vector<std::string>& configured, const std::vector<std::string>& extra);
+
+// Pošalji obavijest: Resend (pošiljatelj modular@…, HTML na jeziku postavki, svaki primatelj zasebno) ili SMTP.
+// secret: lozinka SMTP-a ili API ključ servisa Resend upisan u obrazac (probna poruka); nullopt = spremljena vrijednost.
 std::vector<std::string> send_mail(const Settings& s, const std::string& subject, const std::string& body,
-                                   const std::optional<std::string>& password = std::nullopt);
+                                   const std::optional<std::string>& secret = std::nullopt);
 
 }  // namespace sm

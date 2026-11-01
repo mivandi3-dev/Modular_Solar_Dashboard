@@ -393,15 +393,33 @@
     </section>
 
     <!-- ---------------------------------------------------------- obavijesti -->
-    <section data-panel="alerts" class="panel">
+    <section data-panel="alerts" class="panel" id="alerts-panel" data-provider="resend">
       <h1>Obavijesti e-poštom</h1>
       <p class="lead">Aplikacija šalje e-poštu kad uređaj ne odgovara, kad inverter javi grešku ili kad je proizvodnja na sunčan dan sumnjivo niska. Poruke šalje zadatak za bilježenje podataka, pa stižu i kad aplikacija nije otvorena.</p>
       <fieldset class="glass card">
         <legend>Primatelji</legend>
         <label class="stack">Adrese e-pošte<textarea data-field="alert_emails" rows="3" placeholder="ime.prezime@tvrtka.hr, odrzavanje@tvrtka.hr"></textarea>
-          <small>Više adresa odvojite zarezom ili novim redom (najviše 20). Bez adresa obavijesti su isključene.</small><span class="err" data-error="alert_emails"></span></label>
+          <small>Više adresa odvojite zarezom ili novim redom (najviše 20). Obavijesti stižu i na e-poštu korisnika: na poslužitelju administratorima, na klijentu računu prijavljenom na poslužitelj.</small><span class="err" data-error="alert_emails"></span></label>
       </fieldset>
       <fieldset class="glass card">
+        <legend>Slanje e-pošte</legend>
+        <div class="choices two" role="radiogroup" aria-label="Slanje e-pošte">
+          <label class="choice"><input type="radio" name="mail_provider" value="resend"><b>Resend</b><small>preporučeno – bez vlastitog poslužitelja e-pošte</small></label>
+          <label class="choice"><input type="radio" name="mail_provider" value="smtp"><b>Vlastiti SMTP poslužitelj</b><small>npr. Microsoft 365 ili poslužitelj tvrtke</small></label>
+        </div>
+        <span class="err" data-error="mail_provider"></span>
+        <div class="resend-fields">
+          <div class="fields">
+            <label class="w2">API ključ servisa Resend<input id="resend_api_key" type="password" autocomplete="new-password" spellcheck="false" placeholder="re_…"><small id="resend-key-hint"></small><span class="err" data-error="resend_api_key"></span></label>
+          </div>
+          <p class="muted small">Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.</p>
+        </div>
+        <div class="test">
+          <button class="btn" data-action="test-email">Pošalji probnu poruku</button>
+          <p class="result" id="email-result" role="status"></p>
+        </div>
+      </fieldset>
+      <fieldset class="glass card smtp-fields">
         <legend>Poslužitelj e-pošte (SMTP)</legend>
         <div class="fields">
           <label class="w2">Poslužitelj<input data-field="smtp_host" placeholder="smtp.office365.com"><span class="err" data-error="smtp_host"></span></label>
@@ -413,10 +431,6 @@
           <label class="w2">Pošiljatelj<input data-field="smtp_from" placeholder="solarni.monitor@tvrtka.hr"><small>prazno = korisničko ime</small><span class="err" data-error="smtp_from"></span></label>
         </div>
         <p class="muted small">Lozinka se sprema šifrirana (Windows DPAPI) i radi samo na ovom računalu. Pošta ide preko mrežne kartice prema internetu.</p>
-        <div class="test">
-          <button class="btn" data-action="test-email">Pošalji probnu poruku</button>
-          <p class="result" id="email-result" role="status"></p>
-        </div>
       </fieldset>
       <fieldset class="glass card">
         <legend>Kada poslati obavijest</legend>
@@ -522,7 +536,7 @@
       <label class="toggle w4"><input type="checkbox" data-user="totp_required"><span></span>Dvofaktorska prijava (kod iz aplikacije autentifikatora, npr. Google Authenticator) – korisnik je postavlja pri sljedećoj prijavi skeniranjem QR koda</label>
     </div>
     <div class="totp-admin" id="user-pw-admin" hidden>
-      <button type="button" class="btn ghost" data-action="user-reset-password">Novi aktivacijski kod (zaboravljena lozinka)</button>
+      <button type="button" class="btn ghost" data-action="user-reset-password">Pošalji novi kod e-poštom (zaboravljena lozinka)</button>
       <button type="button" class="btn ghost" data-action="user-logout-all">Odjavi sa svih uređaja</button>
     </div>
     <div class="totp-admin" id="user-totp-admin" hidden>
