@@ -124,6 +124,21 @@ $gwLog = Get-Content (Join-Path $sd "gateway\gateway.log") -Raw -ErrorAction Sil
 Check "gateway: DPAPI računa usluge dostupan (bez zamjene DPAPI-jem računala)" ($gwLog -and $gwLog -notmatch "DPAPI računa usluge nije dostupan") ""
 Check "servis je zapisao otisak gatewaya (service\gateway.json)" (Test-Path (Join-Path $sd "service\gateway.json"))
 
+# ponovna registracija usluge (kao popravak / ponovna instalacija preko postojećih datoteka gatewaya): datoteke ne smiju
+# ostati bez DACL-a, a gateway mora ponovno raditi s istim certifikatom
+$fpBefore = (Get-FileHash (Join-Path $sd "gateway\cert.der") -ErrorAction SilentlyContinue).Hash
+$appDir = Split-Path (Get-CimInstance Win32_Service -Filter "Name='SolariGateway'").PathName.Split('"')[1]
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $appDir "installer\gateway_service.ps1") -Register $appDir -DataDir $sd
+Check "ponovna registracija usluge gatewaya uspjela" ($LASTEXITCODE -eq 0) $LASTEXITCODE
+$broken = @(Get-ChildItem (Join-Path $sd "gateway") -File -Force | Where-Object {
+    $a = Get-Acl -LiteralPath $_.FullName -ErrorAction SilentlyContinue
+    -not $a -or -not ($a.Access | Where-Object { $_.IdentityReference -eq "NT SERVICE\SolariGateway" })
+})
+Check "nakon ponovne registracije svaka datoteka u gateway\ ima dozvolu usluge (nema praznog DACL-a)" ($broken.Count -eq 0) (($broken | ForEach-Object Name) -join ",")
+Start-Sleep 15
+Check "gateway radi 15 s nakon ponovne registracije" ((Get-Service SolariGateway).Status -eq "Running") (Get-Service SolariGateway).Status
+Check "gateway je zadržao certifikat (isti kod za uparivanje)" ($fpBefore -and $fpBefore -eq (Get-FileHash (Join-Path $sd "gateway\cert.der")).Hash)
+
 # ---------------------------------------------------------------- broker (SMA-02) – poller kao SYSTEM
 $plog = Get-Content (Join-Path $cd "service\logs\poller.log") -Raw -ErrorAction SilentlyContinue
 Check "poller (SYSTEM) je pokrenuo broker postavki" ([bool]("$plog" -match "Broker postavki pokrenut")) (($plog -split "`n" | Select-String "Broker" | Select-Object -Last 2) -join " | ")

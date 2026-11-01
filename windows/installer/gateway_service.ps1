@@ -50,7 +50,14 @@ if ($Register) {
     # mapa gatewaya: certifikat (ključ pod DPAPI-jem usluge) i zapisnik – SYSTEM, Administratori, usluga gatewaya
     $gw = Join-Path $DataDir "gateway"
     New-Item -ItemType Directory -Force $gw | Out-Null
-    & icacls.exe $gw /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "NT SERVICE\${Name}:(OI)(CI)M" /T /C /Q | Out-Null
+    # samo mapa dobiva zaštićeni ACL; datoteke u njoj NASLJEĐUJU (/reset). Ne /T s (OI)(CI) dozvolama: na datoteci
+    # /inheritance:r ukloni naslijeđene ACE-ove, a (OI)(CI) ne vrijedi za datoteku – ostaje prazan DACL i ni usluga ni
+    # administrator ne mogu čitati ključ, certifikat ni zapisnik (gateway nakon ponovne instalacije ne može krenuti).
+    & icacls.exe $gw /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "NT SERVICE\${Name}:(OI)(CI)M" /C /Q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "icacls (gateway): $LASTEXITCODE" }
+    if (Get-ChildItem -LiteralPath $gw -Force -ErrorAction SilentlyContinue) {
+        & icacls.exe (Join-Path $gw "*") /reset /T /C /Q | Out-Null  # popravlja i datoteke oštećene starijom instalacijom
+        if ($LASTEXITCODE -ne 0) { throw "icacls (gateway, datoteke): $LASTEXITCODE" }
+    }
     Start-Service -Name $Name
 }
