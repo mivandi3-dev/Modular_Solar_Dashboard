@@ -1,0 +1,30 @@
+# cargo-deny: licence, izvori i poznate ranjivosti ovisnosti gatewaya (AC-GW-1)
+[graph]
+targets = ["x86_64-pc-windows-gnullvm"]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-3-Clause", "ISC", "Unicode-3.0", "Unicode-DFS-2016",
+         "OpenSSL", "Zlib", "MPL-2.0", "CDLA-Permissive-2.0"]
+
+[licenses.private]
+ignore = true
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

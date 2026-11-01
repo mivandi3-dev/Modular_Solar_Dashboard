@@ -1,0 +1,6 @@
+# Fiksni toolchain za ponovljivu gradnju (SOURCE_CONTROL_PLAN: rustup, x86_64-pc-windows-gnullvm uz llvm-mingw)
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+targets = ["x86_64-pc-windows-gnullvm"]

@@ -20,7 +20,8 @@
   #define AppUserModelID "MarkoIvandic.SolarniServer"
   #define DataDir "{commonappdata}\SolarniServer"
   #define TaskParams "-TaskName SolarniPosluzitelj -ExeName SolarniServer.exe -Arguments --service"
-  #define FirewallRule "Solarni posluzitelj - API"
+  #define FirewallRule "Solarni posluzitelj - gateway"
+  #define OldFirewallRule "Solarni posluzitelj - API"
   #define SetupName "SolarniServer-Setup"
 #else
   #define AppName "Solarni monitor"
@@ -176,6 +177,77 @@ ko.RegisteringTask=데이터 기록 작업 등록 중…
 ko.DeleteData=애플리케이션 데이터(발전 기록, 설정, 위젯 배치, 이미지, 백업)도 삭제하시겠습니까?%n%n%1%n%n애플리케이션을 다시 설치하려면 "아니요"를 선택하세요.
 ko.LaunchApp={#AppName} 시작
 
+hr.PinTitle=PIN postavki
+hr.PinSubtitle=Postavke Solarnog monitora štiti PIN
+hr.PinText=Upišite PIN od 4 do 8 znamenki. Bez njega se postavke ne mogu mijenjati (ni administrator iz aplikacije). Pri nadogradnji ostavite prazno da ostane postojeći PIN.
+hr.PinLabel=PIN:
+hr.PinLabel2=Ponovite PIN:
+hr.PinInvalid=PIN ima 4 do 8 znamenki.
+hr.PinMismatch=PIN-ovi se ne podudaraju.
+en.PinTitle=Settings PIN
+en.PinSubtitle=Solarni monitor settings are protected by a PIN
+en.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+en.PinLabel=PIN:
+en.PinLabel2=Repeat PIN:
+en.PinInvalid=The PIN must have 4 to 8 digits.
+en.PinMismatch=The PINs do not match.
+de.PinTitle=Settings PIN
+de.PinSubtitle=Solarni monitor settings are protected by a PIN
+de.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+de.PinLabel=PIN:
+de.PinLabel2=Repeat PIN:
+de.PinInvalid=The PIN must have 4 to 8 digits.
+de.PinMismatch=The PINs do not match.
+fr.PinTitle=Settings PIN
+fr.PinSubtitle=Solarni monitor settings are protected by a PIN
+fr.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+fr.PinLabel=PIN:
+fr.PinLabel2=Repeat PIN:
+fr.PinInvalid=The PIN must have 4 to 8 digits.
+fr.PinMismatch=The PINs do not match.
+it.PinTitle=Settings PIN
+it.PinSubtitle=Solarni monitor settings are protected by a PIN
+it.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+it.PinLabel=PIN:
+it.PinLabel2=Repeat PIN:
+it.PinInvalid=The PIN must have 4 to 8 digits.
+it.PinMismatch=The PINs do not match.
+es.PinTitle=Settings PIN
+es.PinSubtitle=Solarni monitor settings are protected by a PIN
+es.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+es.PinLabel=PIN:
+es.PinLabel2=Repeat PIN:
+es.PinInvalid=The PIN must have 4 to 8 digits.
+es.PinMismatch=The PINs do not match.
+tr.PinTitle=Settings PIN
+tr.PinSubtitle=Solarni monitor settings are protected by a PIN
+tr.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+tr.PinLabel=PIN:
+tr.PinLabel2=Repeat PIN:
+tr.PinInvalid=The PIN must have 4 to 8 digits.
+tr.PinMismatch=The PINs do not match.
+zh.PinTitle=Settings PIN
+zh.PinSubtitle=Solarni monitor settings are protected by a PIN
+zh.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+zh.PinLabel=PIN:
+zh.PinLabel2=Repeat PIN:
+zh.PinInvalid=The PIN must have 4 to 8 digits.
+zh.PinMismatch=The PINs do not match.
+ja.PinTitle=Settings PIN
+ja.PinSubtitle=Solarni monitor settings are protected by a PIN
+ja.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+ja.PinLabel=PIN:
+ja.PinLabel2=Repeat PIN:
+ja.PinInvalid=The PIN must have 4 to 8 digits.
+ja.PinMismatch=The PINs do not match.
+ko.PinTitle=Settings PIN
+ko.PinSubtitle=Solarni monitor settings are protected by a PIN
+ko.PinText=Enter a PIN of 4 to 8 digits. Without it the settings cannot be changed. When upgrading, leave it empty to keep the existing PIN.
+ko.PinLabel=PIN:
+ko.PinLabel2=Repeat PIN:
+ko.PinInvalid=The PIN must have 4 to 8 digits.
+ko.PinMismatch=The PINs do not match.
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "poller"; Description: "{cm:TaskPoller}"; GroupDescription: "{cm:TaskGroupData}"
@@ -192,10 +264,12 @@ Name: "{#DataDir}"; Permissions: admins-full system-full; Flags: uninsneverunins
 Name: "{#DataDir}\data"; Permissions: admins-full system-full; Flags: uninsneveruninstall
 #else
 #ifndef TestInstall
-Name: "{#DataDir}"; Permissions: users-modify; Flags: uninsneveruninstall
-Name: "{#DataDir}\data"; Permissions: users-modify; Flags: uninsneveruninstall
-; 4.0 (SMA-02): sigurnosne kopije, alerts.json i zapisi zadatka sustava – piše samo SYSTEM (ACL u [Run])
+; 4.0 (SMA-02, W4): Users samo čitaju postavke i bazu – izmjene idu kroz broker zadatka sustava (ACL u [Run]);
+; ui\ (raspored, slike, zapisi sučelja) mijenjaju korisnici, a zadatak sustava je nikad ne čita
+Name: "{#DataDir}"; Flags: uninsneveruninstall
+Name: "{#DataDir}\data"; Flags: uninsneveruninstall
 Name: "{#DataDir}\service"; Flags: uninsneveruninstall
+Name: "{#DataDir}\ui"; Flags: uninsneveruninstall
 #endif
 #endif
 
@@ -206,6 +280,11 @@ Source: "{#Build}\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubd
 Source: "{#Build}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Build}\curl\*"; DestDir: "{app}\curl"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "poller_task.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+#ifdef Server
+; 4.0 (B1): mrežni ulaz (Rust) kao usluga s virtualnim računom NT SERVICE\SolariGateway
+Source: "{#Build}\solari-gateway.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "gateway_service.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+#endif
 Source: "..\third_party\webview2\LICENSE.txt"; DestDir: "{app}\licenses"; DestName: "WebView2-LICENSE.txt"; Flags: ignoreversion
 Source: "{#Redist}\MicrosoftEdgeWebview2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not WebView2Installed
 
@@ -231,20 +310,42 @@ Filename: "icacls.exe"; Parameters: """{#DataDir}"" /inheritance:r /grant:r *S-1
 #ifndef TestInstall
 ; 4.0 (SMA-02): mapa servisa – SYSTEM (S-1-5-18) i Administratori (S-1-5-32-544) puna prava, Users (S-1-5-32-545) samo čitanje;
 ; naslijeđeno pravo izmjene se uklanja, pa korisnik ne može podmetnuti spojnicu u mapu u koju piše SYSTEM
-Filename: "icacls.exe"; Parameters: """{#DataDir}\service"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /T /C /Q";   Flags: runhidden waituntilterminated
+; 4.0 (SMA-02, W4): cijela mapa – SYSTEM i Administratori puna prava, Users samo čitanje (i nadogradnja s 4.0.0/3.x,
+; gdje su Users smjeli mijenjati config.json i data\); ui\ – Users izmjena; secrets\ – bez Users
+Filename: "icacls.exe"; Parameters: """{#DataDir}"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /T /C /Q"; Flags: runhidden waituntilterminated
+Filename: "icacls.exe"; Parameters: """{#DataDir}\ui"" /grant *S-1-5-32-545:(OI)(CI)M /T /C /Q"; Flags: runhidden waituntilterminated
+Filename: "icacls.exe"; Parameters: """{#DataDir}\secrets"" /inheritance:r /remove:g *S-1-5-32-545 /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C /Q"; \
+  Flags: runhidden waituntilterminated; Check: DirExists(ExpandConstant('{#DataDir}\secrets'))
+; PIN postavki (obavezan; broker ga traži za svaku izmjenu) – upisan na stranici instalacije, datoteka se odmah briše
+Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Flags: runhidden waituntilterminated; Check: PinEntered
 #endif
 #endif
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\poller_task.ps1"" -Register ""{app}"" {#TaskParams}"; \
   StatusMsg: "{cm:RegisteringTask}"; Tasks: poller; Flags: runhidden waituntilterminated
-; Pregled iz mreže (Postavke → Sustav): dolazni TCP samo u privatnim i domenskim mrežama; aplikacija sluša
-; na mreži samo kad je pregled uključen, inače samo lokalno.
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden waituntilterminated
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" protocol=TCP profile=private,domain enable=yes"; \
+#ifdef Server
+; 4.0 (B1): usluga gatewaya (nakon ACL-a mape poslužitelja – mapa gateway\ dobiva pravo usluge)
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\gateway_service.ps1"" -Register ""{app}"" -DataDir ""{#DataDir}"""; \
   Flags: runhidden waituntilterminated
+#endif
+; 4.0: pravila vezana uz program I port (ne cijeli program). Poslužitelj: samo gateway na 8700 (privatna i domenska
+; mreža); C++ servis više nema mrežni port pa se staro pravilo uklanja. Klijent: pregled iz mreže na 8600, samo privatna mreža.
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden waituntilterminated
+#ifdef Server
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#OldFirewallRule}"""; Flags: runhidden waituntilterminated
+Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\solari-gateway.exe"" protocol=TCP localport=8700 profile=private,domain enable=yes"; \
+  Flags: runhidden waituntilterminated
+#else
+Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" protocol=TCP localport=8600 profile=private enable=yes"; \
+  Flags: runhidden waituntilterminated
+#endif
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchApp}"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
+#ifdef Server
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\gateway_service.ps1"" -Unregister"; \
+  Flags: runhidden waituntilterminated; RunOnceId: "RemoveGateway"
+#endif
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\poller_task.ps1"" -Unregister {#TaskParams}"; \
   Flags: runhidden waituntilterminated; RunOnceId: "RemovePollerTask"
 Filename: "taskkill.exe"; Parameters: "/F /IM {#AppExe}"; Flags: runhidden waituntilterminated; RunOnceId: "StopApp"
@@ -280,7 +381,81 @@ begin
     Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + AppDir + '\installer\poller_task.ps1" -Stop {#TaskParams}',
          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+#ifdef Server
+  if FileExists(AppDir + '\installer\gateway_service.ps1') then
+    Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + AppDir + '\installer\gateway_service.ps1" -Stop',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+#endif
 end;
+
+#if !defined(Server) && !defined(TestInstall)
+{ 4.0 (SMA-02): PIN postavki – obavezan pri prvoj instalaciji; pri nadogradnji prazno = postojeći PIN ostaje }
+var
+  PinPage: TInputQueryWizardPage;
+
+function PinAlreadySet: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{#DataDir}\secrets\secrets.json'));
+end;
+
+procedure InitializeWizard;
+begin
+  PinPage := CreateInputQueryPage(wpSelectTasks, CustomMessage('PinTitle'), CustomMessage('PinSubtitle'), CustomMessage('PinText'));
+  PinPage.Add(CustomMessage('PinLabel'), True);
+  PinPage.Add(CustomMessage('PinLabel2'), True);
+end;
+
+function IsDigits(const S: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Length(S) > 0;
+  for I := 1 to Length(S) do
+    if (S[I] < '0') or (S[I] > '9') then Result := False;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Pin: String;
+begin
+  Result := True;
+  if CurPageID = PinPage.ID then
+  begin
+    Pin := PinPage.Values[0];
+    if (Pin = '') and (PinPage.Values[1] = '') and PinAlreadySet then Exit;
+    if (Length(Pin) < 4) or (Length(Pin) > 8) or not IsDigits(Pin) then
+    begin
+      MsgBox(CustomMessage('PinInvalid'), mbError, MB_OK);
+      Result := False;
+    end else if Pin <> PinPage.Values[1] then
+    begin
+      MsgBox(CustomMessage('PinMismatch'), mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function PinEntered: Boolean;
+begin
+  Result := PinPage.Values[0] <> '';
+end;
+
+function PinFile(Param: String): String;
+begin
+  Result := ExpandConstant('{tmp}\pin.txt');
+  SaveStringToFile(Result, PinPage.Values[0], False);
+end;
+#else
+function PinEntered: Boolean;
+begin
+  Result := False;
+end;
+
+function PinFile(Param: String): String;
+begin
+  Result := '';
+end;
+#endif
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var

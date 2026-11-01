@@ -188,6 +188,11 @@ void App::update_api() {
     if (!service_lock_) service_lock_ = std::make_unique<NamedMutex>(kServerServiceMutex);
     if (!service_lock_->owned()) return;  // API vodi zadatak sustava (--service)
     const Settings s = settings();
+    if (s.server_gateway) {  // 4.0 (B1): mrežu prima samo gateway, a C++ nikad ne otvara TCP port za API
+        if (api_) log_info("API: u načinu gatewaya prozor poslužitelja ne otvara port");
+        api_.reset();
+        return;
+    }
     if (api_ && api_->port() == s.server_port && api_->lan() == (s.server_lan && api_->tls())) return;
     UserStore* store = nullptr;
     try {

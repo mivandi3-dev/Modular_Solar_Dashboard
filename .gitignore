@@ -30,3 +30,6 @@ windows/web/vendor/plotly-basic.min.js
 windows/third_party/curl/
 # izlazi gradnje 4.0 izvan izvora
 /build/
+
+# Rust gateway (Cargo.lock ostaje u repozitoriju – zaključane ovisnosti)
+gateway/target/

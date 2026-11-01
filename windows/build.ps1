@@ -42,6 +42,22 @@ Step "Testovi"
 & "$Build\solari_tests.exe"
 if ($LASTEXITCODE -ne 0) { throw "Testovi nisu prošli – instalacija se ne gradi" }
 
+Step "Rust gateway (B1)"
+# fiksni toolchain iz gateway\rust-toolchain.toml (rustup ga preuzme ako ga nema); zaključane ovisnosti (--locked)
+$Cargo = Find-Tool cargo @("$env:USERPROFILE\.cargo\bin\cargo.exe")
+$GatewaySrc = Join-Path (Split-Path $Root -Parent) "gateway"
+$env:CARGO_TARGET_DIR = Join-Path $Build "gateway-target"
+Push-Location $GatewaySrc
+try {
+    & $Cargo test --release --locked
+    if ($LASTEXITCODE -ne 0) { throw "Testovi gatewaya nisu prošli – instalacija se ne gradi" }
+    & $Cargo build --release --locked
+    if ($LASTEXITCODE -ne 0) { throw "Gradnja gatewaya nije uspjela" }
+} finally {
+    Pop-Location
+}
+Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release\solari-gateway.exe") (Join-Path $Build "solari-gateway.exe") -Force
+
 $WebView = Join-Path $Redist "MicrosoftEdgeWebview2Setup.exe"
 if (-not (Test-Path $WebView)) {
     Step "Preuzimanje WebView2 bootstrappera"

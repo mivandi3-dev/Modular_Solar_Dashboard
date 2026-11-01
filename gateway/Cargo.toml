@@ -1,0 +1,50 @@
+[package]
+name = "solari-gateway"
+version = "4.0.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Solarni monitor 4.0 – mrežni ulaz Solarnog poslužitelja (B1): TLS/HTTP prema klijentima, imenovani kanal prema C++ servisu"
+license = "LicenseRef-Proprietary"
+publish = false
+
+[features]
+default = []
+# Samo razvoj i testovi: ime kanala i očekivani vlasnik kanala iz naredbenog retka (--pipe, --pipe-owner).
+# Izdanje (build.ps1) se gradi bez ove značajke – vlasnik kanala je uvijek SYSTEM.
+dev = []
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rcgen = { version = "0.13", default-features = false, features = ["ring", "pem", "crypto"] }
+time = "0.3"
+serde_json = "1"
+base64 = "0.22"
+sha2 = "0.10"
+windows-service = "0.7"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_Networking_WinSock",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "macros", "sync"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
