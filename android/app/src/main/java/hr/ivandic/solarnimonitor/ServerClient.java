@@ -179,8 +179,26 @@ final class ServerClient {
         }
     }
 
+    /** 5.0.1 (audit A-01): poslužitelj ne određuje kako WebView tumači odgovor – HTML/SVG „slika” se ne izvršava na
+     *  izvoru aplikacije (gdje je dostupan most). */
+    static String safeType(String path, String serverType) {
+        if (!path.startsWith("/api/v1/images/")) return "application/json";
+        String t = serverType == null ? "" : serverType.toLowerCase(java.util.Locale.ROOT);
+        int semi = t.indexOf(';');
+        if (semi >= 0) t = t.substring(0, semi);
+        t = t.trim();
+        return t.equals("image/png") || t.equals("image/jpeg") || t.equals("image/webp") || t.equals("image/gif") ? t : "application/octet-stream";
+    }
+
+    /** 5.0.1 (audit A-03): točno ime hosta (ne prefiks niza – http://localhost.napadac.tld nije loopback). */
     static boolean isLoopback(String base) {
-        return base.startsWith("http://127.0.0.1") || base.startsWith("http://localhost");
+        if (base == null || !base.startsWith("http://")) return false;
+        try {
+            String host = new java.net.URI(base).getHost();
+            return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "[::1]".equals(host) || "::1".equals(host);
+        } catch (java.net.URISyntaxException e) {
+            return false;
+        }
     }
 
     /** /ping (otisak), zatim /login samo poslužitelju s istim otiskom. knownPin: otisak od prije (ista adresa). */

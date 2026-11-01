@@ -209,6 +209,24 @@ public class ServerClientTest {
         }
     }
 
+    @Test public void serverCannotChooseExecutableContentType() {  // 5.0.1, audit A-01
+        assertEquals("image/png", ServerClient.safeType("/api/v1/images/logo", "image/PNG; charset=x"));
+        assertEquals("application/octet-stream", ServerClient.safeType("/api/v1/images/logo", "text/html"));
+        assertEquals("application/octet-stream", ServerClient.safeType("/api/v1/images/hero", "image/svg+xml"));
+        assertEquals("application/json", ServerClient.safeType("/api/v1/dashboard", "text/html"));
+        assertEquals("application/json", ServerClient.safeType("/api/v1/report", null));
+    }
+
+    @Test public void loopbackIsExactHost() {  // 5.0.1, audit A-03
+        assertTrue(ServerClient.isLoopback("http://127.0.0.1:8700"));
+        assertTrue(ServerClient.isLoopback("http://localhost:8700"));
+        assertFalse(ServerClient.isLoopback("http://127.0.0.1.nip.io:8700"));
+        assertFalse(ServerClient.isLoopback("http://localhost.napadac.example"));
+        assertFalse(ServerClient.isLoopback("https://127.0.0.1:8700"));
+        assertEquals("https://localhost.napadac.example", Prefs.normalize("http://localhost.napadac.example"));
+        assertEquals("http://127.0.0.1:8700", Prefs.normalize("http://127.0.0.1:8700"));
+    }
+
     @Test public void certificateChangeIsRejected() throws Exception {
         try (FakeServer s = new FakeServer(keystoreB)) {  // napadač / zamijenjen certifikat
             String base = "https://127.0.0.1:" + s.port;

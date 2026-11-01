@@ -33,3 +33,11 @@ windows/third_party/curl/
 
 # Rust gateway (Cargo.lock ostaje u repozitoriju – zaključane ovisnosti)
 gateway/target/
+
+# 5.0.1 (audit I-10)
+__pycache__/
+*.pyc
+*.pfx
+*.p12
+*.pem
+*.key

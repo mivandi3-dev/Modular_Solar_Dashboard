@@ -38,7 +38,9 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
+            // 5.0.1 (audit A-04, I-06): izdanje se nikad ne potpisuje javnim debug ključem – bez keystore.properties gradnja
+            // izdanja pada (pakiranje traži storeFile), a debug gradnja radi kao i prije
+            signingConfig signingConfigs.release
         }
     }
 

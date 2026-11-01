@@ -340,7 +340,7 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#Ol
 Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\solari-gateway.exe"" protocol=TCP localport=8700 profile=private,domain enable=yes"; \
   Flags: runhidden waituntilterminated
 #else
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" protocol=TCP localport=8600 profile=private enable=yes"; \
+Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" protocol=TCP localport=8600 profile=private remoteip=localsubnet enable=yes"; \
   Flags: runhidden waituntilterminated
 #endif
 #ifdef Server

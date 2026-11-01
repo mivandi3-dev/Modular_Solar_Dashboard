@@ -154,7 +154,7 @@ final class Prefs {
         if (u.isEmpty()) return "";
         if (!URL.matcher(u).matches()) return null;
         // 3.0: poslužitelj u mreži je samo HTTPS (obični http samo na istom uređaju)
-        if (u.startsWith("http://") && !u.startsWith("http://127.0.0.1") && !u.startsWith("http://localhost")) u = "https://" + u.substring(7);
+        if (u.startsWith("http://") && !ServerClient.isLoopback(u)) u = "https://" + u.substring(7);
         return u;
     }
 

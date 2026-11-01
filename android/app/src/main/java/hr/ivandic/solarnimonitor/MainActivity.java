@@ -155,7 +155,20 @@ public class MainActivity extends Activity {
     }
 
     // ------------------------------------------------------------------ lokalne datoteke i poslužitelj
+    /** Trenutna stranica (5.0.1, audit A-02): osjetljive metode mosta rade samo na stranici postavki. */
+    private volatile String currentPage = "";
+
+    private boolean onSettingsPage() {
+        return currentPage.startsWith(SETTINGS);
+    }
+
     private final class Client extends WebViewClient {
+        @Override
+        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            currentPage = url == null ? "" : url;
+            super.onPageStarted(view, url, favicon);
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
             return !HOST.equals(req.getUrl().getHost());  // vanjske adrese se ne otvaraju u aplikaciji
@@ -228,6 +241,13 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void clearImages() {
+        images.evictAll();
+        File[] files = new File(getFilesDir(), "images").listFiles();
+        if (files != null) for (File f : files) //noinspection ResultOfMethodCallIgnored
+            f.delete();
+    }
+
     private void writeImage(String path, String target, ServerClient.Fetched img) {
         File f = imageFile(path, target), dir = f.getParentFile();
         if (dir == null || (!dir.isDirectory() && !dir.mkdirs())) return;
@@ -267,7 +287,7 @@ public class MainActivity extends Activity {
             if (c == null) c = readImage(path, target);
             if (c != null) {
                 images.put(target, c);
-                return response(200, c.type, new ByteArrayInputStream(c.body));
+                return response(200, ServerClient.safeType(path, c.type), new ByteArrayInputStream(c.body));
             }
         }
         try {
@@ -276,7 +296,7 @@ public class MainActivity extends Activity {
                 images.put(target, new Cached(f.type(), f.body()));
                 writeImage(path, target, f);
             }
-            return response(f.status(), f.type(), new ByteArrayInputStream(f.body()));
+            return response(f.status(), ServerClient.safeType(path, f.type()), new ByteArrayInputStream(f.body()));
         } catch (ServerClient.ServerException e) {
             return error(495, e.getMessage());  // npr. promijenjen certifikat – poruka za korisnika
         } catch (IOException e) {
@@ -394,6 +414,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String saveSettings(String json) {
+            if (!onSettingsPage()) return result(false, "Nije dopušteno.").toString();
             try {
                 JSONObject res = prefs.save(new JSONObject(json));
                 runOnUiThread(MainActivity.this::applyKeepOn);
@@ -406,6 +427,7 @@ public class MainActivity extends Activity {
         /** Prijava na poslužitelj (adresa iz obrasca) – lozinka ide samo poslužitelju; odgovor na __solariCallback. */
         @JavascriptInterface
         public void login(String json, String callbackId) {
+            if (!onSettingsPage()) { callback(callbackId, result(false, "Nije dopušteno.")); return; }
             io.execute(() -> {
                 try {
                     JSONObject f = new JSONObject(json);
@@ -451,6 +473,7 @@ public class MainActivity extends Activity {
 
         /** Zaboravljena lozinka: kod e-poštom (reset = false) ili nova lozinka uz kod (reset = true); odgovor na __solariCallback. */
         private void passwordFlow(String json, String callbackId, boolean reset) {
+            if (!onSettingsPage()) { callback(callbackId, result(false, "Nije dopušteno.")); return; }
             io.execute(() -> {
                 try {
                     JSONObject f = new JSONObject(json);
@@ -489,6 +512,7 @@ public class MainActivity extends Activity {
         /** Otvara otpauth:// u aplikaciji autentifikatoru na istom mobitelu (QR kod se ne može skenirati sam sobom). */
         @JavascriptInterface
         public boolean openAuthenticator(String uri) {
+            if (!onSettingsPage()) return false;
             if (uri == null || !uri.startsWith("otpauth://totp/")) return false;
             try {
                 startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)));
@@ -500,9 +524,11 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void logout(String callbackId) {
+            if (!onSettingsPage()) { callback(callbackId, result(false, "Nije dopušteno.")); return; }
             io.execute(() -> {
                 logoutQuietly();
                 prefs.clearLogin();
+                clearImages();  // audit A-08: slike prethodnog poslužitelja ne ostaju na uređaju
                 callback(callbackId, result(true, "Odjavljeni ste."));
             });
         }
