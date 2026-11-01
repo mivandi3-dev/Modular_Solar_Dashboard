@@ -120,7 +120,7 @@ LayoutResult validate_layout(const Catalog& catalog, const json& items) {
                          {{"size", std::to_string(p.w) + "×" + std::to_string(p.h)},
                           {"min", std::to_string(spec->min_w) + "×" + std::to_string(spec->min_h)},
                           {"max", std::to_string(spec->max_w) + "×" + std::to_string(spec->max_h)}});
-        } else if (p.x < 0 || p.y < 0 || p.x + p.w > catalog.cols || p.y + p.h > catalog.rows) {
+        } else if (p.x < 0 || p.y < 0 || p.x > catalog.cols - p.w || p.y > catalog.rows - p.h) {  // bez preljeva (W-17)
             problem = tr("izlazi iz ekrana");
         }
         p.options = coerce_options(*spec, raw.value("options", json::object()), r.errors);
@@ -172,6 +172,8 @@ Pages load_pages(const Catalog& catalog, const fs::path& file) {
 }
 
 void save_pages(const Pages& pages, const fs::path& file) {
+    // 5.0.2 (audit W-05): zajednička ui\ – bez upisa kroz spojnicu ili simboličku vezu (provjera pri svakom upisu)
+    if (!ui_write_allowed(file.parent_path())) throw std::runtime_error(tr("Mapa rasporeda je spojnica ili simbolička veza – raspored nije spremljen."));
     json list = json::array();
     for (const auto& p : pages.pages) list.push_back({{"widgets", layout_json(p)}});
     if (!ui_write_allowed(file.parent_path())) throw std::runtime_error("Mapa rasporeda je spojnica – raspored nije spremljen.");  // NEW-05

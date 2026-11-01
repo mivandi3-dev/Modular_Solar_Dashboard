@@ -180,8 +180,9 @@ std::string pairing_code(const std::string& fingerprint) {
         raw.push_back(static_cast<uint8_t>(hi * 16 + lo));
     }
     if (raw.size() != 32) return {};
-    const std::string b32 = base32(Bytes(raw.begin(), raw.begin() + 8)).substr(0, 12);  // 60 bita
-    return b32.substr(0, 4) + "-" + b32.substr(4, 4) + "-" + b32.substr(8, 4);
+    // 5.0.2 (audit G-07/A-05): 100 bita otiska (20 znakova base32) umjesto 60 – druga predslika više nije izvediva
+    const std::string b32 = base32(Bytes(raw.begin(), raw.begin() + 13)).substr(0, 20);
+    return b32.substr(0, 5) + "-" + b32.substr(5, 5) + "-" + b32.substr(10, 5) + "-" + b32.substr(15, 5);
 }
 
 bool pairing_code_matches(const std::string& entered, const std::string& fingerprint) {

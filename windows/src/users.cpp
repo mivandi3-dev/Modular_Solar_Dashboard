@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <semaphore>
 #include <set>
 #include <stdexcept>
 
@@ -273,7 +274,10 @@ void UserStore::migrate() {
         {"reset_salt", "BLOB"}, {"reset_hash", "BLOB"}, {"reset_until", "INTEGER NOT NULL DEFAULT 0"},
         {"reset_sent", "INTEGER NOT NULL DEFAULT 0"}, {"reset_tries", "INTEGER NOT NULL DEFAULT 0"},
         // 5.0.1 (audit C-04): dnevni limit kodova po računu
-        {"reset_day", "INTEGER NOT NULL DEFAULT 0"}, {"reset_day_count", "INTEGER NOT NULL DEFAULT 0"}};
+        {"reset_day", "INTEGER NOT NULL DEFAULT 0"}, {"reset_day_count", "INTEGER NOT NULL DEFAULT 0"},
+        // 5.0.2 (audit C-12): drugi korak po računu i ukupni ritam pokušaja
+        {"totp_failed", "INTEGER NOT NULL DEFAULT 0"}, {"totp_locked_until", "INTEGER NOT NULL DEFAULT 0"},
+        {"totp_locks", "INTEGER NOT NULL DEFAULT 0"}, {"acct_last_attempt", "INTEGER NOT NULL DEFAULT 0"}};
     for (const auto& [name, type] : columns) {
         if (!have.count(name)) exec(db_, ("ALTER TABLE users ADD COLUMN " + std::string(name) + " " + type).c_str());
     }
@@ -382,6 +386,29 @@ void UserStore::set_password_hash(int64_t id, const std::string& password, std::
     wipe(hash);
     revoke_sessions(id);  // nova lozinka = sve postojeće prijave prestaju vrijediti
 }
+
+namespace {
+// 5.0.2 (audit C-03): PBKDF2 (600 000 ponavljanja) se ne računa pod zajedničkom bravom korisnika – inače poplava
+// neprijavljenih zahtjeva zamrzava sve prijavljene korisnike. Najviše kPbkdf2Parallel izračuna istodobno.
+std::counting_semaphore<kPbkdf2Parallel>& pbkdf2_gate() {
+    static std::counting_semaphore<kPbkdf2Parallel> gate(kPbkdf2Parallel);
+    return gate;
+}
+
+template <class F>
+auto unlocked_pbkdf2(std::unique_lock<std::recursive_mutex>& lock, F&& work) {
+    lock.unlock();
+    pbkdf2_gate().acquire();
+    struct Release {
+        std::unique_lock<std::recursive_mutex>& l;
+        ~Release() {
+            pbkdf2_gate().release();
+            l.lock();
+        }
+    } release{lock};
+    return work();
+}
+}  // namespace
 
 bool UserStore::verify_password(const Row& r, const std::string& password) const {
     if (r.salt.empty() || r.hash.empty() || r.iter <= 0) return false;
@@ -504,20 +531,30 @@ std::optional<UserInfo> UserStore::get(int64_t id) {
 
 LoginResult UserStore::login(const std::string& email, std::string password, const std::string& device, std::time_t now,
                              const std::string& totp, std::string new_password, const std::string& source) {
-    std::lock_guard lock(mu_);
+    std::unique_lock lock(mu_);
     LoginResult res;
-    source_ = source.empty() ? std::string(kLoginSourceLocal) : source.substr(0, 64);
-    const auto row = password.size() <= kMaxPasswordLength ? row_by_email(email) : std::nullopt;
+    const std::string src_key = source.empty() ? std::string(kLoginSourceLocal) : source.substr(0, 64);
+    auto row = password.size() <= kMaxPasswordLength ? row_by_email(email) : std::nullopt;
     if (!row) {
         // nepoznata e-pošta: isti rad kao provjera lozinke, da se po vremenu ne može doznati postoji li račun
-        Bytes dummy = pbkdf2_sha256(password, Bytes(kSaltBytes, 0), iterations_, kHashBytes);
-        wipe(dummy);
+        unlocked_pbkdf2(lock, [&] {
+            Bytes dummy = pbkdf2_sha256(password, Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+            wipe(dummy);
+            return 0;
+        });
         wipe(password);
         return res;
     }
-    // aktivacijski kod se uspoređuje bez crtica i razmaka, velikim slovima
-    const bool good = verify_password(*row, row->must_change ? normalize_activation_code(password) : password);
+    // aktivacijski kod se uspoređuje bez crtica i razmaka, velikim slovima; PBKDF2 izvan brave (C-03)
+    const Row snapshot = *row;
+    bool good = unlocked_pbkdf2(lock, [&] {
+        return verify_password(snapshot, snapshot.must_change ? normalize_activation_code(password) : password);
+    });
     wipe(password);
+    source_ = src_key;  // brava je u međuvremenu bila otpuštena – izvor se postavlja tek sad
+    row = row_by_id(snapshot.id);  // lozinka se u međuvremenu mogla promijeniti – vrijedi samo provjera istog zapisa
+    if (!row || row->salt != snapshot.salt || row->hash != snapshot.hash || row->must_change != snapshot.must_change) good = false;
+    if (!row) return res;
     // R-14a: zaključan je samo ovaj izvor za ovaj račun; uz pogrešnu lozinku isto kao nepostojeći račun (SMA-13)
     const SourceState src = source_state(row->id, source_);
     if (src.locked_until > now) {
@@ -525,10 +562,24 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
         return res;
     }
     // R-14a: raspodijeljeni napad na račun – udaljeni izvor smije najviše jedan pokušaj u minuti (lokalni prozor izuzet)
-    if (source_ != kLoginSourceLocal && account_throttled(row->id, now) && now - src.last_attempt < kThrottleSeconds) {
-        touch_source(row->id, source_, now);
-        res.status = good ? LoginResult::Status::Locked : LoginResult::Status::BadCredentials;
-        return res;
+    if (source_ != kLoginSourceLocal && account_throttled(row->id, now)) {
+        // 5.0.2 (audit C-12): uz to i ukupno, sa svih izvora zajedno, najviše jedan pokušaj u kAccountGlobalSeconds –
+        // broj adresa (IPv6 /64) više ne umnožava broj pokušaja
+        int64_t last_any = 0;
+        {
+            Stmt q(db_, "SELECT acct_last_attempt FROM users WHERE id = ?");
+            q.bind(1, row->id);
+            if (q.step()) last_any = q.i64(0);
+        }
+        const bool too_fast = now - src.last_attempt < kThrottleSeconds || now - last_any < kAccountGlobalSeconds;
+        Stmt t(db_, "UPDATE users SET acct_last_attempt = ? WHERE id = ?");
+        t.bind(1, static_cast<int64_t>(now)).bind(2, row->id);
+        t.step();
+        if (too_fast) {
+            touch_source(row->id, source_, now);
+            res.status = good ? LoginResult::Status::Locked : LoginResult::Status::BadCredentials;
+            return res;
+        }
     }
     if (!good) {
         count_failure(*row, now, res, LoginResult::Status::BadCredentials);
@@ -666,10 +717,65 @@ void UserStore::count_failure(const Row& r, std::time_t now, LoginResult& res, L
 }
 
 // Drugi korak prijave; false = res sadrži razlog (treba kod, postavljanje, pogrešan kod ili zaključano)
+void UserStore::totp_failure(const Row& r, std::time_t now, LoginResult& res) {
+    int64_t failed = 0, locks = 0;
+    {
+        Stmt q(db_, "SELECT totp_failed, totp_locks FROM users WHERE id = ?");
+        q.bind(1, r.id);
+        if (q.step()) {
+            failed = q.i64(0);
+            locks = q.i64(1);
+        }
+    }
+    ++failed;
+    if (failed < kTotpMaxFailures) {
+        Stmt u(db_, "UPDATE users SET totp_failed = ? WHERE id = ?");
+        u.bind(1, failed).bind(2, r.id);
+        u.step();
+        return;
+    }
+    const std::time_t lock_for = std::min<std::time_t>(kTotpLockMaxSeconds, kTotpLockSeconds << std::min<int64_t>(locks, 5));
+    Stmt u(db_, "UPDATE users SET totp_failed = 0, totp_locks = totp_locks + 1, totp_locked_until = ? WHERE id = ?");
+    u.bind(1, static_cast<int64_t>(now + lock_for)).bind(2, r.id);
+    u.step();
+    res.status = LoginResult::Status::Locked;
+    res.totp_locked = true;
+    const std::string msg = "Račun #" + std::to_string(r.id) + ": " + std::to_string(kTotpMaxFailures) +
+                            " pogrešnih kodova drugog koraka uz točnu lozinku – drugi korak zaključan " +
+                            std::to_string(lock_for / 60) + " min. Lozinka računa je vjerojatno poznata napadaču.";
+    log_warn("Korisnici: " + msg);
+    if (alert_) {
+        try {
+            alert_(msg);
+        } catch (const std::exception& e) {
+            log_error(std::string("Korisnici: upozorenje nije poslano: ") + e.what());
+        }
+    }
+}
+
+bool UserStore::totp_locked(const Row& r, std::time_t now) {
+    Stmt q(db_, "SELECT totp_locked_until FROM users WHERE id = ?");
+    q.bind(1, r.id);
+    return q.step() && q.i64(0) > now;
+}
+
+void UserStore::totp_success(const Row& r) {
+    Stmt u(db_, "UPDATE users SET totp_failed = 0 WHERE id = ?");
+    u.bind(1, r.id);
+    u.step();
+}
+
 bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t now, LoginResult& res) {
+    // 5.0.2 (audit C-12): zaključan drugi korak – kod se uopće ne provjerava (ni kod za oporavak)
+    if (!trim(code).empty() && totp_locked(r, now)) {
+        res.status = LoginResult::Status::Locked;
+        return false;
+    }
     if (r.totp_secret_enc.empty()) {  // još nije postavljena: tajna čeka potvrdu prvim kodom
         Bytes secret;
-        if (!r.totp_pending_enc.empty()) {
+        // 5.0.2 (audit C-10): svaki prikaz postavljanja (bez koda) dobiva NOVU tajnu – tko zna lozinku ne može
+        // preuzeti tajnu koju je vlasnik već skenirao; potvrda kodom vrijedi samo za zadnju prikazanu tajnu
+        if (!r.totp_pending_enc.empty() && !trim(code).empty()) {
             const std::string s = open("totp_pending", r.totp_pending_enc);
             secret.assign(s.begin(), s.end());
         }
@@ -688,8 +794,11 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
         const auto step = totp_verify(secret, code, now, 0);
         if (!step) {
             count_failure(r, now, res, LoginResult::Status::TotpInvalid);
+            totp_failure(r, now, res);
             return false;
         }
+        totp_success(r);
+        res.totp_enrolled = true;
         res.recovery_codes = make_recovery_codes();
         json hashes = json::array();
         for (const auto& rc : res.recovery_codes) hashes.push_back(recovery_tag(normalize_recovery_code(rc)));
@@ -713,6 +822,7 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
         Stmt q(db_, "UPDATE users SET totp_last_step = ? WHERE id = ?");
         q.bind(1, *step).bind(2, r.id);
         q.step();
+        totp_success(r);
         return true;
     }
     // kod za oporavak (jednokratan)
@@ -730,11 +840,13 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
                 q.bind(1, codes.dump()).bind(2, r.id);
                 q.step();
                 log_warn("Korisnici: prijava kodom za oporavak (korisnik #" + std::to_string(r.id) + ", preostalo " + std::to_string(codes.size()) + ")");
+                totp_success(r);
                 return true;
             }
         }
     }
     count_failure(r, now, res, LoginResult::Status::TotpInvalid);
+    totp_failure(r, now, res);
     return false;
 }
 
@@ -756,13 +868,19 @@ std::string UserStore::issue_activation_code(int64_t id, std::time_t now) {
 }
 
 ResetRequest UserStore::request_password_reset(const std::string& email, std::time_t now) {
-    std::lock_guard lock(mu_);
+    std::unique_lock lock(mu_);
     ResetRequest out;
+    const auto dummy_work = [&] {
+        unlocked_pbkdf2(lock, [&] {
+            Bytes dummy = pbkdf2_sha256("XXXXXXXX", Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+            wipe(dummy);
+            return 0;
+        });
+    };
     const auto row = row_by_email(email);
     if (!row || row->disabled) {
         // isti rad kao za postojeći račun (PBKDF2), da se po vremenu ne može doznati postoji li račun
-        Bytes dummy = pbkdf2_sha256("XXXXXXXX", Bytes(kSaltBytes, 0), iterations_, kHashBytes);
-        wipe(dummy);
+        dummy_work();
         return out;
     }
     {
@@ -773,8 +891,7 @@ ResetRequest UserStore::request_password_reset(const std::string& email, std::ti
             const bool same_day = now - q.i64(1) < 24 * 3600;
             if (too_soon || (same_day && q.i64(2) >= kResetPerDay)) {
                 // bez novog koda i bez e-poruke, ali isti rad (PBKDF2) kao slanje – vrijeme ne otkriva račun (audit C-01)
-                Bytes dummy = pbkdf2_sha256("XXXXXXXX", Bytes(kSaltBytes, 0), iterations_, kHashBytes);
-                wipe(dummy);
+                dummy_work();
                 return out;
             }
         }
@@ -783,7 +900,7 @@ ResetRequest UserStore::request_password_reset(const std::string& email, std::ti
     std::string code = base32(raw).substr(0, kResetCodeChars);
     wipe(raw);
     Bytes salt = random_bytes(kSaltBytes);
-    Bytes hash = pbkdf2_sha256(code, salt, iterations_, kHashBytes);
+    Bytes hash = unlocked_pbkdf2(lock, [&] { return pbkdf2_sha256(code, salt, iterations_, kHashBytes); });
     Stmt q(db_, "UPDATE users SET reset_salt = ?, reset_hash = ?, reset_until = ?, reset_sent = ?, reset_tries = 0,"
                 " reset_day_count = CASE WHEN ? - reset_day < 86400 THEN reset_day_count + 1 ELSE 1 END,"
                 " reset_day = CASE WHEN ? - reset_day < 86400 THEN reset_day ELSE ? END WHERE id = ?");
@@ -802,13 +919,16 @@ ResetRequest UserStore::request_password_reset(const std::string& email, std::ti
 }
 
 ResetResult UserStore::reset_password(const std::string& email, const std::string& code, std::string new_password, std::time_t now) {
-    std::lock_guard lock(mu_);
+    std::unique_lock lock(mu_);
     ResetResult res;
     const std::string entered = normalize_activation_code(code);
     const auto row = entered.size() == kResetCodeChars && new_password.size() <= kMaxPasswordLength ? row_by_email(email) : std::nullopt;
     if (!row || row->disabled) {
-        Bytes dummy = pbkdf2_sha256(entered, Bytes(kSaltBytes, 0), iterations_, kHashBytes);
-        wipe(dummy);
+        unlocked_pbkdf2(lock, [&] {
+            Bytes dummy = pbkdf2_sha256(entered, Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+            wipe(dummy);
+            return 0;
+        });
         wipe(new_password);
         return res;
     }
@@ -828,9 +948,16 @@ ResetResult UserStore::reset_password(const std::string& email, const std::strin
     bool good = false;
     {  // PBKDF2 uvijek – i kad račun nema kod na čekanju, inače vrijeme odgovora otkriva postoji li račun (audit C-01)
         const bool pending = !salt.empty() && !hash.empty();
-        Bytes h = pbkdf2_sha256(entered, pending ? salt : Bytes(kSaltBytes, 0), iterations_, pending ? hash.size() : kHashBytes);
+        Bytes h = unlocked_pbkdf2(lock, [&] {  // izvan brave (C-03)
+            return pbkdf2_sha256(entered, pending ? salt : Bytes(kSaltBytes, 0), iterations_, pending ? hash.size() : kHashBytes);
+        });
         good = pending && equal_ct(h, hash);
         wipe(h);
+        // kod se u međuvremenu mogao iskoristiti ili zamijeniti – vrijedi samo ako je u bazi još isti
+        Stmt q(db_, "SELECT reset_hash, reset_tries FROM users WHERE id = ?");
+        q.bind(1, row->id);
+        if (!q.step() || q.blob(0) != hash) good = false;
+        else tries = static_cast<int>(q.i64(1));
     }
     if (!good || now > until || tries >= kResetMaxTries) {
         wipe(new_password);

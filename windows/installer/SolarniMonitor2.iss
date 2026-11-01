@@ -103,6 +103,7 @@ hr.TaskGroupData=Rad u pozadini:
 hr.InstallingWebView=Instaliram Microsoft Edge WebView2 Runtime…
 hr.RegisteringTask=Registriram zadatak za bilježenje podataka…
 hr.DeleteData=Obrisati i podatke aplikacije (povijest proizvodnje, postavke, raspored widgeta, slike, sigurnosne kopije)?%n%n%1%n%nOdaberite „Ne” ako ćete aplikaciju ponovno instalirati.
+hr.AppDirUnsafe=Mapa programa mora biti unutar mape Program Files (%1).%n%nDruge mape (npr. C:\Solarni) mogu mijenjati i obični korisnici, pa bi netko mogao podmetnuti datoteku koju zatim pokreće sustav. Odaberite mapu unutar Program Files.
 hr.LaunchApp=Pokreni {#AppName}
 
 en.TaskPoller=Record SmartLogger data even when the application is closed (recommended)
@@ -111,6 +112,7 @@ en.TaskGroupData=Background operation:
 en.InstallingWebView=Installing Microsoft Edge WebView2 Runtime…
 en.RegisteringTask=Registering the data recording task…
 en.DeleteData=Also delete the application data (production history, settings, widget layout, images, backups)?%n%n%1%n%nChoose “No” if you will reinstall the application.
+en.AppDirUnsafe=The program folder must be inside Program Files (%1).%n%nOther folders (for example C:\Solarni) can be changed by standard users, so someone could plant a file that the system then runs. Choose a folder inside Program Files.
 en.LaunchApp=Start {#AppName}
 
 de.TaskPoller=SmartLogger-Daten auch bei geschlossener Anwendung aufzeichnen (empfohlen)
@@ -119,6 +121,7 @@ de.TaskGroupData=Hintergrundbetrieb:
 de.InstallingWebView=Microsoft Edge WebView2 Runtime wird installiert…
 de.RegisteringTask=Aufgabe zur Datenaufzeichnung wird registriert…
 de.DeleteData=Auch die Anwendungsdaten löschen (Erzeugungsverlauf, Einstellungen, Widget-Anordnung, Bilder, Sicherungen)?%n%n%1%n%nWählen Sie „Nein“, wenn Sie die Anwendung erneut installieren.
+de.AppDirUnsafe=Der Programmordner muss sich in „Programme“ befinden (%1).%n%nAndere Ordner (z. B. C:\Solarni) können von Standardbenutzern geändert werden, sodass jemand eine Datei unterschieben könnte, die das System dann ausführt. Wählen Sie einen Ordner unter „Programme“.
 de.LaunchApp={#AppName} starten
 
 fr.TaskPoller=Enregistrer les données du SmartLogger même lorsque l'application est fermée (recommandé)
@@ -127,6 +130,7 @@ fr.TaskGroupData=Fonctionnement en arrière-plan :
 fr.InstallingWebView=Installation de Microsoft Edge WebView2 Runtime…
 fr.RegisteringTask=Enregistrement de la tâche de collecte des données…
 fr.DeleteData=Supprimer aussi les données de l'application (historique de production, paramètres, disposition des widgets, images, sauvegardes) ?%n%n%1%n%nChoisissez « Non » si vous allez réinstaller l'application.
+fr.AppDirUnsafe=Le dossier du programme doit se trouver dans Program Files (%1).%n%nLes autres dossiers (par exemple C:\Solarni) peuvent être modifiés par des utilisateurs standard, qui pourraient y placer un fichier ensuite exécuté par le système. Choisissez un dossier dans Program Files.
 fr.LaunchApp=Lancer {#AppName}
 
 it.TaskPoller=Registra i dati dello SmartLogger anche ad applicazione chiusa (consigliato)
@@ -135,6 +139,7 @@ it.TaskGroupData=Funzionamento in background:
 it.InstallingWebView=Installazione di Microsoft Edge WebView2 Runtime…
 it.RegisteringTask=Registrazione dell'attività di registrazione dati…
 it.DeleteData=Eliminare anche i dati dell'applicazione (storico della produzione, impostazioni, disposizione dei widget, immagini, backup)?%n%n%1%n%nScegli «No» se reinstallerai l'applicazione.
+it.AppDirUnsafe=La cartella del programma deve trovarsi in Programmi (%1).%n%nLe altre cartelle (ad esempio C:\Solarni) possono essere modificate dagli utenti standard, che potrebbero inserirvi un file eseguito poi dal sistema. Scegli una cartella in Programmi.
 it.LaunchApp=Avvia {#AppName}
 
 es.TaskPoller=Registrar los datos del SmartLogger también con la aplicación cerrada (recomendado)
@@ -143,6 +148,7 @@ es.TaskGroupData=Funcionamiento en segundo plano:
 es.InstallingWebView=Instalando Microsoft Edge WebView2 Runtime…
 es.RegisteringTask=Registrando la tarea de registro de datos…
 es.DeleteData=¿Eliminar también los datos de la aplicación (historial de producción, configuración, disposición de widgets, imágenes, copias de seguridad)?%n%n%1%n%nElija «No» si va a reinstalar la aplicación.
+es.AppDirUnsafe=La carpeta del programa debe estar dentro de Archivos de programa (%1).%n%nOtras carpetas (por ejemplo C:\Solarni) pueden ser modificadas por usuarios estándar, que podrían colocar un archivo que luego ejecuta el sistema. Elija una carpeta dentro de Archivos de programa.
 es.LaunchApp=Iniciar {#AppName}
 
 tr.TaskPoller=Uygulama kapalıyken de SmartLogger verilerini kaydet (önerilen)
@@ -151,6 +157,7 @@ tr.TaskGroupData=Arka planda çalışma:
 tr.InstallingWebView=Microsoft Edge WebView2 Runtime yükleniyor…
 tr.RegisteringTask=Veri kayıt görevi kaydediliyor…
 tr.DeleteData=Uygulama verileri de silinsin mi (üretim geçmişi, ayarlar, widget yerleşimi, görüntüler, yedekler)?%n%n%1%n%nUygulamayı yeniden yükleyecekseniz „Hayır” seçin.
+tr.AppDirUnsafe=Program klasörü Program Files içinde olmalıdır (%1).%n%nDiğer klasörler (örneğin C:\Solarni) standart kullanıcılar tarafından değiştirilebilir; biri sistemin daha sonra çalıştıracağı bir dosya yerleştirebilir. Program Files içinde bir klasör seçin.
 tr.LaunchApp={#AppName} uygulamasını başlat
 
 zh.TaskPoller=应用程序关闭时也记录 SmartLogger 数据（推荐）
@@ -159,6 +166,7 @@ zh.TaskGroupData=后台运行：
 zh.InstallingWebView=正在安装 Microsoft Edge WebView2 Runtime…
 zh.RegisteringTask=正在注册数据记录任务…
 zh.DeleteData=是否同时删除应用程序数据（发电历史、设置、小组件布局、图片、备份）？%n%n%1%n%n如果您将重新安装应用程序，请选择“否”。
+zh.AppDirUnsafe=程序文件夹必须位于 Program Files 内（%1）。%n%n其他文件夹（例如 C:\Solarni）可被普通用户修改，可能有人放入随后由系统运行的文件。请选择 Program Files 内的文件夹。
 zh.LaunchApp=启动 {#AppName}
 
 ja.TaskPoller=アプリケーションを閉じていても SmartLogger のデータを記録する（推奨）
@@ -167,6 +175,7 @@ ja.TaskGroupData=バックグラウンド動作：
 ja.InstallingWebView=Microsoft Edge WebView2 Runtime をインストールしています…
 ja.RegisteringTask=データ記録タスクを登録しています…
 ja.DeleteData=アプリケーションのデータ（発電履歴、設定、ウィジェット配置、画像、バックアップ）も削除しますか？%n%n%1%n%nアプリケーションを再インストールする場合は「いいえ」を選んでください。
+ja.AppDirUnsafe=プログラムフォルダーは Program Files 内にする必要があります（%1）。%n%nそれ以外のフォルダー（例: C:\Solarni）は一般ユーザーが変更できるため、システムが実行するファイルを仕込まれるおそれがあります。Program Files 内のフォルダーを選択してください。
 ja.LaunchApp={#AppName} を起動
 
 ko.TaskPoller=애플리케이션이 닫혀 있어도 SmartLogger 데이터 기록(권장)
@@ -175,6 +184,7 @@ ko.TaskGroupData=백그라운드 동작:
 ko.InstallingWebView=Microsoft Edge WebView2 Runtime 설치 중…
 ko.RegisteringTask=데이터 기록 작업 등록 중…
 ko.DeleteData=애플리케이션 데이터(발전 기록, 설정, 위젯 배치, 이미지, 백업)도 삭제하시겠습니까?%n%n%1%n%n애플리케이션을 다시 설치하려면 "아니요"를 선택하세요.
+ko.AppDirUnsafe=프로그램 폴더는 Program Files 안에 있어야 합니다(%1).%n%n다른 폴더(예: C:\Solarni)는 일반 사용자가 변경할 수 있어, 시스템이 실행할 파일을 누군가 심어 둘 수 있습니다. Program Files 안의 폴더를 선택하세요.
 ko.LaunchApp={#AppName} 시작
 
 hr.PinTitle=PIN postavki
@@ -388,6 +398,14 @@ var
 begin
   Result := '';
   AppDir := ExpandConstant('{app}');
+  { 5.0.2 (audit I-12): samo unutar Program Files – mapu izvan nje (npr. C:\Solarni) obični korisnik može unaprijed
+    stvoriti i u nju podmetnuti DLL ili skriptu koju zatim pokreće administrator (instalacija) ili SYSTEM (zadatak) }
+  if (Pos(Lowercase(AddBackslash(ExpandConstant('{autopf}'))), Lowercase(AddBackslash(AppDir))) <> 1) and
+     (Pos(Lowercase(AddBackslash(ExpandConstant('{commonpf}'))), Lowercase(AddBackslash(AppDir))) <> 1) then
+  begin
+    Result := FmtMessage(CustomMessage('AppDirUnsafe'), [ExpandConstant('{autopf}')]);
+    Exit;
+  end;
   if FileExists(AppDir + '\installer\poller_task.ps1') then
     Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + AppDir + '\installer\poller_task.ps1" -Stop {#TaskParams}',
          '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -502,6 +520,9 @@ begin
   begin
     RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SolarniMonitor2');
     DataDir := ExpandConstant('{#DataDir}');
+    { 5.0.2 (audit I-11): tajne (oznake prijave, ključevi, PIN) ne ostaju nakon uklanjanja – ni pri tihoj deinstalaciji }
+    if DirExists(DataDir + '\secrets') then
+      DelTree(DataDir + '\secrets', True, True, True);
     if DirExists(DataDir) and not UninstallSilent and
        (MsgBox(FmtMessage(CustomMessage('DeleteData'), [DataDir]), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
       DelTree(DataDir, True, True, True);

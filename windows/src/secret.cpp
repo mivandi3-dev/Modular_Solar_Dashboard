@@ -38,7 +38,12 @@ std::vector<uint8_t> from_base64(const std::string& text) {
 // LocalFree za izlaz DPAPI-ja
 struct LocalBlob {
     DATA_BLOB blob{};
-    ~LocalBlob() { if (blob.pbData) LocalFree(blob.pbData); }
+    ~LocalBlob() {
+        if (blob.pbData) {
+            SecureZeroMemory(blob.pbData, blob.cbData);  // 5.0.2 (audit C-16): tajna ne ostaje u oslobođenoj memoriji
+            LocalFree(blob.pbData);
+        }
+    }
 };
 
 }  // namespace

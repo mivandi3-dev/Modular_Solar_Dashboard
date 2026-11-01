@@ -131,9 +131,9 @@ public class PrefsKeystoreTest {
         byte[] h = MessageDigest.getInstance("SHA-256").digest("abc".getBytes("UTF-8"));
         StringBuilder fp = new StringBuilder();
         for (int i = 0; i < h.length; i++) fp.append(i == 0 ? "" : ":").append(String.format("%02X", h[i]));
-        assertEquals("XJ4B-NP4P-AHH6", ServerClient.pairingCode(fp.toString()));
-        assertTrue(ServerClient.pairingMatches("xj4bnp4pahh6", fp.toString()));
-        assertFalse(ServerClient.pairingMatches("XJ4B-NP4P-AHH7", fp.toString()));
+        assertEquals("XJ4BN-P4PAH-H6UQK-BIDPF", ServerClient.pairingCode(fp.toString()));
+        assertTrue(ServerClient.pairingMatches("xj4bnp4pahh6uqkbidpf", fp.toString()));
+        assertFalse(ServerClient.pairingMatches("XJ4BN-P4PAH-H6UQK-BIDPG", fp.toString()));
     }
 
     @Test

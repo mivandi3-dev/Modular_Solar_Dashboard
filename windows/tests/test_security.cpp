@@ -328,13 +328,14 @@ TEST_CASE("SMA-15: IPv6 se grupira po /64, neispravan zapis ne zaobilazi brojanj
 // ---------------------------------------------------------------- SMA-04 (kod za uparivanje)
 #include "tls.hpp"
 
-TEST_CASE("SMA-04: kod za uparivanje – 12 znakova iz SHA-256 otiska, tolerantan unos, odbijanje drugog certifikata") {
+TEST_CASE("SMA-04: kod za uparivanje – 20 znakova (100 bita) iz SHA-256 otiska, tolerantan unos, odbijanje drugog certifikata") {
     const std::string fp = "8D:29:86:91:10:49:64:12:9B:D6:BC:56:6F:F3:F4:D2:2E:6F:28:89:1F:53:8F:AB:B2:EC:DC:0E:2C:1A:79:00";
     const std::string code = pairing_code(fp);
-    CHECK(code == "RUUY-NEIQ-JFSB");  // base32 prvih 60 bita (8D 29 86 91 10 49 64 12 …)
-    CHECK(pairing_code_matches("ruuyneiqjfsb", fp));
-    CHECK(pairing_code_matches(" RUUY NEIQ JFSB ", fp));
-    CHECK_FALSE(pairing_code_matches("RUUY-NEIQ-JFSC", fp));
+    CHECK(code == "RUUYN-EIQJF-SBFG6-WXRLG");  // base32 prvih 100 bita (8D 29 86 91 10 49 64 12 9B D6 BC 56 6F …)
+    CHECK(pairing_code_matches("ruuyneiqjfsbfg6wxrlg", fp));
+    CHECK(pairing_code_matches(" RUUYN EIQJF SBFG6 WXRLG ", fp));
+    CHECK_FALSE(pairing_code_matches("RUUYN-EIQJF-SBFG6-WXRLH", fp));
+    CHECK_FALSE(pairing_code_matches("RUUY-NEIQ-JFSB", fp));  // stari kod od 60 bita više ne vrijedi
     CHECK_FALSE(pairing_code_matches("", fp));
     std::string other = fp;
     other[1] = 'E';  // drugi certifikat (napadač u mreži)

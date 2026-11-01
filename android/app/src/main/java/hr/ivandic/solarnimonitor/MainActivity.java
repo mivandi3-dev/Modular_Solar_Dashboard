@@ -46,6 +46,11 @@ import org.json.JSONObject;
  */
 public class MainActivity extends Activity {
     private static final String HOST = "app.solari";
+    /** Aplikacije autentifikatori kojima se smije predati otpauth:// (audit A-07). */
+    private static final String[] AUTHENTICATORS = {
+            "com.google.android.apps.authenticator2", "com.azure.authenticator", "com.beemdevelopment.aegis",
+            "com.twofasapp", "org.fedorahosted.freeotp", "org.liberty.android.freeotpplus", "com.authy.authy",
+            "proton.android.pass", "com.x8bit.bitwarden", "com.bitwarden.authenticator", "com.agilebits.onepassword"};
     private static final String START = "https://" + HOST + "/web/index.html";
     private static final String SETTINGS = "https://" + HOST + "/web/settings-android.html";
     private static final Pattern API_PATH = Pattern.compile("^/api/v1/(info|dashboard|report|images/(hero|drawing|logo))$");
@@ -71,6 +76,7 @@ public class MainActivity extends Activity {
         prefs = new Prefs(this);
         WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0);
         web = new WebView(this);
+        web.setFilterTouchesWhenObscured(true);  // 5.0.2 (audit A-13): dodiri kroz tuđi prozor preko aplikacije se odbacuju
         web.setBackgroundColor(0xFF0B1120);
         WebSettings ws = web.getSettings();
         ws.setJavaScriptEnabled(true);
@@ -159,13 +165,28 @@ public class MainActivity extends Activity {
     private volatile String currentPage = "";
 
     private boolean onSettingsPage() {
-        return currentPage.startsWith(SETTINGS);
+        return isSettings(currentPage);
+    }
+
+    /** 5.0.2 (audit A-14): točno https://app.solari/web/settings-android.html (shema, host i put), ne prefiks niza. */
+    private static boolean isSettings(String url) {
+        if (url == null || url.isEmpty()) return false;
+        Uri u = Uri.parse(url);
+        return "https".equals(u.getScheme()) && HOST.equals(u.getHost()) && "/web/settings-android.html".equals(u.getPath());
+    }
+
+    /** 5.0.2 (audit A-10): stranica postavki (TOTP tajna, QR, kodovi za oporavak) ne ide u snimke zaslona ni u pregled aplikacija. */
+    private void applySecureWindow(boolean secret) {
+        if (secret) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!secret);
     }
 
     private final class Client extends WebViewClient {
         @Override
         public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
             currentPage = url == null ? "" : url;
+            applySecureWindow(isSettings(currentPage));
             super.onPageStarted(view, url, favicon);
         }
 
@@ -177,7 +198,7 @@ public class MainActivity extends Activity {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
             Uri u = req.getUrl();
-            if (!HOST.equals(u.getHost())) return error(403, "forbidden");
+            if (!"https".equals(u.getScheme()) || !HOST.equals(u.getHost())) return error(403, "forbidden");
             String path = u.getPath() == null ? "" : u.getPath();
             if (path.startsWith("/web/")) return asset(path.substring(5));
             if (!"GET".equals(req.getMethod()) || !API_PATH.matcher(path).matches()) return error(404, "not_found");
@@ -367,6 +388,12 @@ public class MainActivity extends Activity {
     }
 
     private void callback(String id, JSONObject result) {
+        if (!onSettingsPage()) {  // 5.0.2 (audit A-14): stranica se u međuvremenu promijenila – tajne joj se ne predaju
+            result.remove("recovery_codes");
+            result.remove("account");
+            result.remove("totp");
+            result.remove("pin");
+        }
         String js = "window.__solariCallback && window.__solariCallback(" + JSONObject.quote(id) + ", " + result + ")";
         runOnUiThread(() -> web.evaluateJavascript(js, null));
     }
@@ -439,7 +466,9 @@ public class MainActivity extends Activity {
                     ServerClient.Login l = ServerClient.login(url, f.optString("email"), f.optString("password"), prefs.knownPin(url),
                                                               f.optString("totp"), f.optString("new_password"), f.optString("pairing_code"));
                     logoutQuietly();  // prethodna prijava ne ostaje aktivna na poslužitelju
+                    boolean otherServer = !url.equals(prefs.loginUrl());
                     prefs.setLogin(url, l.token(), l.account(), l.pin());
+                    if (otherServer) clearImages();  // 5.0.2 (audit A-12): slike prethodnog poslužitelja ne ostaju
                     JSONObject ok = result(true, "Prijavljeni ste kao {name}.");
                     ok.put("name", l.account().optString("name"));
                     ok.put("account", l.account());
@@ -514,12 +543,18 @@ public class MainActivity extends Activity {
         public boolean openAuthenticator(String uri) {
             if (!onSettingsPage()) return false;
             if (uri == null || !uri.startsWith("otpauth://totp/")) return false;
-            try {
-                startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)));
-                return true;
-            } catch (android.content.ActivityNotFoundException e) {
-                return false;
+            // 5.0.2 (audit A-07): TOTP tajna ide samo poznatoj aplikaciji autentifikatoru, ne bilo kojoj s otpauth://
+            for (String pkg : AUTHENTICATORS) {
+                Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(pkg);
+                if (i.resolveActivity(getPackageManager()) == null) continue;
+                try {
+                    startActivity(i);
+                    return true;
+                } catch (android.content.ActivityNotFoundException e) {
+                    // sljedeća
+                }
             }
+            return false;  // stranica nudi ručni unos tajne
         }
 
         @JavascriptInterface

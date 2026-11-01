@@ -132,6 +132,108 @@ pub fn exclusive_address(socket: &tokio::net::TcpSocket) -> io::Result<()> {
     Ok(())
 }
 
+/// 5.0.2 (audit G-11): IPv6 utičnica samo za IPv6 (bez dvostrukog stoga) – loopback [::1] drži gateway, ne drugi proces.
+pub fn v6_only(socket: &tokio::net::TcpSocket) -> io::Result<()> {
+    use std::os::windows::io::AsRawSocket;
+    use windows_sys::Win32::Networking::WinSock::{setsockopt, IPPROTO_IPV6, IPV6_V6ONLY, SOCKET};
+    let on: i32 = 1;
+    // SAFETY: utičnica je valjana (posuđena), vrijednost je lokalna i živi do kraja poziva
+    let rc = unsafe { setsockopt(socket.as_raw_socket() as SOCKET, IPPROTO_IPV6, IPV6_V6ONLY, &on as *const i32 as *const u8, 4) };
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// PID procesa usluge (npr. "cloudflared") ili None ako usluga ne postoji, ne radi ili nije dostupna.
+pub fn service_pid(name: &str) -> Option<u32> {
+    use windows_sys::Win32::System::Services::{
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatusEx, SC_MANAGER_CONNECT, SC_STATUS_PROCESS_INFO,
+        SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_STATUS_PROCESS,
+    };
+    let wname = wide(name);
+    // SAFETY: ručke se zatvaraju na svakom putu; izlazna struktura je lokalna i ispravne veličine
+    unsafe {
+        let scm = OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT);
+        if scm.is_null() {
+            return None;
+        }
+        let svc = OpenServiceW(scm, wname.as_ptr(), SERVICE_QUERY_STATUS);
+        if svc.is_null() {
+            CloseServiceHandle(scm);
+            return None;
+        }
+        let mut st: SERVICE_STATUS_PROCESS = std::mem::zeroed();
+        let mut needed = 0u32;
+        let ok = QueryServiceStatusEx(
+            svc,
+            SC_STATUS_PROCESS_INFO,
+            &mut st as *mut SERVICE_STATUS_PROCESS as *mut u8,
+            std::mem::size_of::<SERVICE_STATUS_PROCESS>() as u32,
+            &mut needed,
+        );
+        CloseServiceHandle(svc);
+        CloseServiceHandle(scm);
+        (ok != 0 && st.dwCurrentState == SERVICE_RUNNING && st.dwProcessId != 0).then_some(st.dwProcessId)
+    }
+}
+
+/// PID procesa koji drži lokalni kraj TCP veze `peer` → `server` (oboje s gledišta gatewaya: peer je udaljeni kraj).
+pub fn tcp_peer_pid(server: std::net::SocketAddr, peer: std::net::SocketAddr) -> Option<u32> {
+    use std::net::{IpAddr, Ipv6Addr};
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID, TCP_TABLE_OWNER_PID_CONNECTIONS,
+    };
+    use windows_sys::Win32::Networking::WinSock::{AF_INET, AF_INET6};
+    let port = |dw: u32| u16::from_be((dw & 0xFFFF) as u16);
+    let v6 = matches!(peer.ip(), IpAddr::V6(a) if a.to_ipv4_mapped().is_none());
+    let family = if v6 { AF_INET6 } else { AF_INET } as u32;
+    let mut size = 0u32;
+    // SAFETY: prvi poziv samo vraća potrebnu veličinu; drugi piše u međuspremnik te veličine (poravnat na u32)
+    unsafe {
+        GetExtendedTcpTable(ptr::null_mut(), &mut size, 0, family, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+        for _ in 0..3 {
+            let mut buf = vec![0u32; (size as usize).div_ceil(4) + 16];
+            let mut len = (buf.len() * 4) as u32;
+            let rc = GetExtendedTcpTable(buf.as_mut_ptr() as *mut c_void, &mut len, 0, family, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+            if rc != 0 {
+                size = len;
+                continue;
+            }
+            let count = buf[0] as usize;
+            if v6 {
+                let rows = std::slice::from_raw_parts(buf.as_ptr().add(1) as *const MIB_TCP6ROW_OWNER_PID, count);
+                let (IpAddr::V6(pa), IpAddr::V6(sa)) = (peer.ip(), server.ip()) else { return None };
+                return rows
+                    .iter()
+                    .find(|r| {
+                        Ipv6Addr::from(r.ucLocalAddr) == pa
+                            && port(r.dwLocalPort) == peer.port()
+                            && port(r.dwRemotePort) == server.port()
+                            && Ipv6Addr::from(r.ucRemoteAddr) == sa
+                    })
+                    .map(|r| r.dwOwningPid);
+            }
+            let to_v4 = |ip: IpAddr| match ip {
+                IpAddr::V4(a) => Some(a),
+                IpAddr::V6(a) => a.to_ipv4_mapped(),
+            };
+            let (Some(pa), Some(sa)) = (to_v4(peer.ip()), to_v4(server.ip())) else { return None };
+            let rows = std::slice::from_raw_parts(buf.as_ptr().add(1) as *const MIB_TCPROW_OWNER_PID, count);
+            return rows
+                .iter()
+                .find(|r| {
+                    std::net::Ipv4Addr::from(r.dwLocalAddr.to_ne_bytes()) == pa
+                        && port(r.dwLocalPort) == peer.port()
+                        && port(r.dwRemotePort) == server.port()
+                        && std::net::Ipv4Addr::from(r.dwRemoteAddr.to_ne_bytes()) == sa
+                })
+                .map(|r| r.dwOwningPid);
+        }
+        None
+    }
+}
+
 fn blob(data: &[u8]) -> CRYPT_INTEGER_BLOB {
     CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 }
 }
@@ -149,7 +251,15 @@ pub fn dpapi_protect(data: &[u8]) -> io::Result<(Vec<u8>, bool)> {
 pub fn dpapi_unprotect(data: &[u8]) -> io::Result<Vec<u8>> {
     match data.split_first() {
         Some((b'U', rest)) => dpapi(rest, false, false),
-        Some((b'M', rest)) => dpapi(rest, false, true),
+        // 5.0.2 (audit G-13): ključ zapečaćen DPAPI-jem računala može izraditi svaki lokalni korisnik (podmetnuta mapa
+        // prije instalacije). Prihvaća se samo kad DPAPI računa usluge stvarno nije dostupan – inače se odbija, a
+        // tlscert izrađuje novi ključ (stari ostaje sačuvan, razlog u zapisniku – G-08).
+        Some((b'M', rest)) => {
+            if dpapi(b"probe", true, false).is_ok() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "ključ je zapečaćen DPAPI-jem računala, a DPAPI računa radi"));
+            }
+            dpapi(rest, false, true)
+        }
         _ => Err(io::Error::new(io::ErrorKind::InvalidData, "nepoznat zapis ključa")),
     }
 }
@@ -213,8 +323,25 @@ mod tests {
         bad[last] ^= 0xFF;
         assert!(dpapi_unprotect(&bad).is_err());
         assert!(dpapi_unprotect(b"Xabc").is_err());
+        // G-13: u profilu s DPAPI-jem računa ključ zapečaćen DPAPI-jem računala se odbija (mogao ga je podmetnuti
+        // bilo koji lokalni korisnik)
         let m = [b"M".as_slice(), &dpapi(b"k2", true, true).unwrap()].concat();
-        assert_eq!(dpapi_unprotect(&m).unwrap(), b"k2");
+        assert!(dpapi_unprotect(&m).is_err());
+    }
+
+    #[test]
+    fn tcp_peer_pid_finds_own_process() {
+        // G-14: vlasnik udaljenog kraja veze s loopbacka (ovdje isti proces), IPv4 i IPv6
+        for addr in ["127.0.0.1:0", "[::1]:0"] {
+            let Ok(listener) = std::net::TcpListener::bind(addr) else { continue };
+            let server = listener.local_addr().unwrap();
+            let client = std::net::TcpStream::connect(server).unwrap();
+            let (_conn, peer) = listener.accept().unwrap();
+            assert_eq!(peer, client.local_addr().unwrap());
+            assert_eq!(tcp_peer_pid(server, peer), Some(std::process::id()), "{addr}");
+            assert_eq!(tcp_peer_pid(server, std::net::SocketAddr::new(peer.ip(), 1)), None);
+        }
+        assert_eq!(service_pid("SolariNepostojecaUsluga"), None);
     }
 
     #[test]

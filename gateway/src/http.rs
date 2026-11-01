@@ -13,6 +13,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 
 pub const MAX_BODY: usize = 16 * 1024;
+const BODY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Ono što gateway treba od servisa (stvarni kanal ili lažni u testovima).
 pub trait Upstream: Send + Sync + 'static {
@@ -87,18 +88,25 @@ fn secure_headers(h: &mut hyper::HeaderMap) {
 
 /// Poruka za servis iz HTTP zahtjeva (bez tijela) ili gotov odgovor s greškom.
 #[allow(clippy::result_large_err)]
-/// `plain_http`: veza je obični HTTP (cloudflared na istom računalu); samo tada se prosljeđuje CF-Connecting-IP (audit G-02).
-pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr, plain_http: bool) -> Result<Value, Response<Full<Bytes>>> {
+/// `trusted_proxy`: obični HTTP s loopbacka od procesa usluge cloudflared (server.rs provjerava PID); samo tada se
+/// prosljeđuje CF-Connecting-IP (audit G-02, 5.0.2: G-14 / C-11).
+pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr, trusted_proxy: bool) -> Result<Value, Response<Full<Bytes>>> {
     let Some((route, image)) = route(req.uri().path()) else {
         return Err(error(StatusCode::NOT_FOUND, "not_found", "Nije pronađeno."));
     };
+    // 5.0.2 (audit G-03): API nema klijenta u pregledniku (aplikacije šalju zahtjeve bez Origin / Sec-Fetch-*). Stranica u
+    // pregledniku (DNS rebinding, CSRF prema loopbacku) se odbija prije servisa.
+    let h = req.headers();
+    if ["origin", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest"].iter().any(|n| h.contains_key(*n)) {
+        crate::server::count(crate::server::STAT_BROWSER);
+        return Err(error(StatusCode::FORBIDDEN, "forbidden", "Zahtjevi iz preglednika nisu dopušteni."));
+    }
     let method = match *req.method() {
         Method::GET => "GET",
         Method::HEAD => "HEAD",
         Method::POST => "POST",
         _ => return Err(error(StatusCode::METHOD_NOT_ALLOWED, "method", "Metoda nije dopuštena.")),
     };
-    let h = req.headers();
     if h.contains_key(TRANSFER_ENCODING) {
         return Err(error(StatusCode::LENGTH_REQUIRED, "length_required", "Potrebna je duljina tijela (Content-Length)."));
     }
@@ -125,7 +133,7 @@ pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr, plain_http: bool) -> Result<Val
         msg["token"] = json!(token);
     }
     // CF-Connecting-IP samo s loopbacka (cloudflared); servis ga ionako uzima samo za 127.0.0.1 (SMA-15)
-    if plain_http && ip.is_loopback() {
+    if trusted_proxy && ip.is_loopback() {
         if let Some(cf) = h.get("cf-connecting-ip").and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse::<IpAddr>().ok()) {
             msg["cf_ip"] = json!(cf.to_string());
         }
@@ -175,20 +183,22 @@ where
     handle_transport(req, peer, false, upstream).await
 }
 
-pub async fn handle_transport<B, U>(req: Request<B>, peer: SocketAddr, plain_http: bool, upstream: &U) -> Response<Full<Bytes>>
+pub async fn handle_transport<B, U>(req: Request<B>, peer: SocketAddr, trusted_proxy: bool, upstream: &U) -> Response<Full<Bytes>>
 where
     B: Body<Data = Bytes>,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     U: Upstream,
 {
-    let mut msg = match to_ipc(&req, peer.ip(), plain_http) {
+    let mut msg = match to_ipc(&req, peer.ip(), trusted_proxy) {
         Ok(m) => m,
         Err(r) => return r,
     };
     if req.method() == Method::POST {
-        let body = match Limited::new(req.into_body(), MAX_BODY).collect().await {
-            Ok(c) => c.to_bytes(),
-            Err(_) => return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large", "Zahtjev je prevelik."),
+        // 5.0.2 (audit G-04): tijelo mora stići u 5 s (spori klijent ne drži vezu do roka cijele veze)
+        let body = match tokio::time::timeout(BODY_TIMEOUT, Limited::new(req.into_body(), MAX_BODY).collect()).await {
+            Ok(Ok(c)) => c.to_bytes(),
+            Ok(Err(_)) => return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large", "Zahtjev je prevelik."),
+            Err(_) => return error(StatusCode::REQUEST_TIMEOUT, "timeout", "Zahtjev nije stigao na vrijeme."),
         };
         match std::str::from_utf8(&body) {
             Ok(text) if !text.is_empty() => msg["body"] = json!(text),
@@ -198,6 +208,14 @@ where
     }
     match upstream.call(msg).await {
         Ok(resp) => from_ipc(&resp),
+        // 5.0.2 (audit G-16): zahtjev koji nakon JSON escapiranja premašuje okvir je prevelik, a ne kvar servisa
+        Err(e) if e.kind() == io::ErrorKind::InvalidInput => error(StatusCode::PAYLOAD_TOO_LARGE, "too_large", "Zahtjev je prevelik."),
+        // 5.0.2 (audit G-04): svi pozivi servisa zauzeti – brzo odbijanje umjesto čekanja u redu
+        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+            let mut r = error(StatusCode::SERVICE_UNAVAILABLE, "busy", "Poslužitelj je zauzet – pokušajte ponovno za nekoliko sekundi.");
+            r.headers_mut().insert(hyper::header::RETRY_AFTER, HeaderValue::from_static("2"));
+            r
+        }
         Err(_) => error(StatusCode::SERVICE_UNAVAILABLE, "unavailable", "Servis Solarnog poslužitelja nije dostupan."),
     }
 }
@@ -325,6 +343,16 @@ mod tests {
         let sent = up.0.lock().unwrap().pop().unwrap();
         assert_eq!(sent["year"], 0);
         assert_eq!(sent["month"], 0);
+    }
+
+    #[tokio::test]
+    async fn browser_requests_are_refused() {
+        let up = Fake(Mutex::new(Vec::new()));
+        for (name, value) in [("origin", "http://napadac.example"), ("sec-fetch-site", "cross-site"), ("sec-fetch-mode", "cors")] {
+            let r = req("POST", "/api/v1/login").header(name, value).body(Full::new(Bytes::from("{}"))).unwrap();
+            assert_eq!(handle_transport(r, peer("127.0.0.1"), true, &up).await.status(), 403, "{name}");
+        }
+        assert!(up.0.lock().unwrap().is_empty(), "zahtjev iz preglednika ne stiže do servisa");
     }
 
     #[test]

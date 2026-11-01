@@ -18,8 +18,8 @@ android {
         applicationId "hr.ivandic.solarnimonitor"
         minSdk 26
         targetSdk 36
-        versionCode 501
-        versionName "5.0.1"
+        versionCode 502
+        versionName "5.0.2"
         // 4.0 AT-04: instrumentirani testovi na uređaju/emulatoru (gradlew connectedDebugAndroidTest)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,11 +37,18 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // 5.0.2 (audit A-09): R8 smanjuje i zamućuje kod izdanja; most prema JavaScriptu čuva proguard-rules.pro
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             // 5.0.1 (audit A-04, I-06): izdanje se nikad ne potpisuje javnim debug ključem – bez keystore.properties gradnja
             // izdanja pada (pakiranje traži storeFile), a debug gradnja radi kao i prije
             signingConfig signingConfigs.release
         }
+    }
+
+    buildFeatures {
+        buildConfig true  // BuildConfig.DEBUG: obični HTTP prema loopbacku samo u razvojnoj gradnji (audit A-11)
     }
 
     compileOptions {

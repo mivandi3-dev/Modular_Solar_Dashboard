@@ -150,7 +150,10 @@ std::string thumbnail(const fs::path& file) {
     try {
         Decoded d = decode(file);
         const UINT w = std::min(kThumbWidth, d.width), h = std::max(1u, static_cast<UINT>(std::lround(double(d.height) * w / d.width)));
-        const fs::path tmp = fs::temp_directory_path() / L"solari_thumb.png";
+        // 5.0.2 (audit C-16): jedinstveno ime koje stvara sustav (ne fiksni %TEMP%\solari_thumb.png)
+        wchar_t name[MAX_PATH]{};
+        if (!GetTempFileNameW(fs::temp_directory_path().c_str(), L"sth", 0, name)) return "";
+        const fs::path tmp = name;
         encode(d.source.p, w, h, tmp, false);
         const auto bytes = read_file(tmp);
         fs::remove(tmp);

@@ -36,6 +36,11 @@ MailContent password_reset_mail(const std::string& code, const std::string& firs
                                 const std::string& plant_name, std::time_t valid_until);
 // Potvrda da je lozinka promijenjena (engleski, bez koda) – audit C-09
 MailContent password_changed_mail(const std::string& first_name, const std::string& email, const std::string& plant_name, std::time_t when);
+// 5.0.2: sigurnosne obavijesti vlasniku računa (engleski, bez koda): lozinka promijenjena kodom (C-09) ili s prijavljenog
+// uređaja (C-13), uključena dvofaktorska prijava (C-10), zaključan drugi korak zbog pogrešnih kodova (C-12)
+enum class SecurityNotice { PasswordReset, PasswordChanged, TotpEnabled, TotpLocked };
+MailContent security_notice_mail(SecurityNotice kind, const std::string& first_name, const std::string& email,
+                                 const std::string& plant_name, std::time_t when);
 // Predložak obavijesti/greške na trenutnom jeziku (set_language): naslov, tekst poruke, podnožje
 MailContent alert_mail(const std::string& subject, const std::string& body, const std::string& plant_name);
 
@@ -58,6 +63,7 @@ std::string resend_key(const Settings& s);
 std::string send_activation_mail(const Settings& s, const std::string& email, const std::string& first_name,
                                  const std::string& code, std::time_t valid_until);
 void send_password_changed_mail(const Settings& s, const std::string& email, const std::string& first_name);
+void send_security_notice(const Settings& s, const std::string& email, const std::string& first_name, SecurityNotice kind);
 // Kod za zaboravljenu lozinku (pošiljatelj registration@…); baca MailError
 void send_password_reset_mail(const Settings& s, const std::string& email, const std::string& first_name, const std::string& code,
                               std::time_t valid_until);

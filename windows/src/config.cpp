@@ -132,6 +132,7 @@ json to_json(const Settings& s, bool include_pin_hash) {
         {"alert_offline_min", s.alert_offline_min}, {"alert_low_production", s.alert_low_production},
         {"alert_fault", s.alert_fault}, {"data_source", s.data_source}, {"cloud_url", s.cloud_url},
         {"cloud_token_enc", s.cloud_token_enc}, {"cloud_account_enc", s.cloud_account_enc}, {"cloud_cert_pin", s.cloud_cert_pin},
+        {"secrets_owner_sid", s.secrets_owner_sid},
         {"server_port", s.server_port}, {"server_lan", s.server_lan}, {"server_gateway", s.server_gateway},
     };
     if (include_pin_hash) j["settings_pin_hash"] = s.settings_pin_hash;
@@ -212,6 +213,7 @@ Settings settings_from_json(const json& j) {
     read(j, "cloud_token_enc", s.cloud_token_enc);
     read(j, "cloud_account_enc", s.cloud_account_enc);
     read(j, "cloud_cert_pin", s.cloud_cert_pin);
+    read(j, "secrets_owner_sid", s.secrets_owner_sid);
     if (const auto u = normalize_server_url(s.cloud_url)) s.cloud_url = *u;  // stari http://IP:8700 → https
     read(j, "server_port", s.server_port);
     read(j, "server_lan", s.server_lan);

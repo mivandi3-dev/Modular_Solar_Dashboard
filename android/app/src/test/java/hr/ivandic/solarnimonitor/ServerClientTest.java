@@ -145,10 +145,11 @@ public class ServerClientTest {
 
     @Test public void pairingCodeMatchesCppVector() {
         String fp = "8D:29:86:91:10:49:64:12:9B:D6:BC:56:6F:F3:F4:D2:2E:6F:28:89:1F:53:8F:AB:B2:EC:DC:0E:2C:1A:79:00";
-        assertEquals("RUUY-NEIQ-JFSB", ServerClient.pairingCode(fp));  // isti vektor kao C++ test SMA-04
-        assertTrue(ServerClient.pairingMatches("ruuyneiqjfsb", fp));
-        assertTrue(ServerClient.pairingMatches(" RUUY NEIQ JFSB ", fp));
-        assertFalse(ServerClient.pairingMatches("RUUY-NEIQ-JFSC", fp));
+        assertEquals("RUUYN-EIQJF-SBFG6-WXRLG", ServerClient.pairingCode(fp));  // isti vektor kao C++ test SMA-04 (100 bita)
+        assertTrue(ServerClient.pairingMatches("ruuyneiqjfsbfg6wxrlg", fp));
+        assertTrue(ServerClient.pairingMatches(" RUUYN EIQJF SBFG6 WXRLG ", fp));
+        assertFalse(ServerClient.pairingMatches("RUUYN-EIQJF-SBFG6-WXRLH", fp));
+        assertFalse(ServerClient.pairingMatches("RUUY-NEIQ-JFSB", fp));  // stari kod od 60 bita
         assertFalse(ServerClient.pairingMatches("", fp));
         assertEquals("", ServerClient.pairingCode("nije otisak"));
     }
@@ -169,7 +170,7 @@ public class ServerClientTest {
     @Test public void noOrWrongPairingCodeSendsNoPassword() throws Exception {
         try (FakeServer s = new FakeServer(keystoreA)) {
             String base = "https://127.0.0.1:" + s.port;
-            for (String code : new String[] {"", "AAAA-BBBB-CCCC", ServerClient.pairingCode(fingerprint(keystoreB))}) {
+            for (String code : new String[] {"", "AAAAA-BBBBB-CCCCC-DDDDD", ServerClient.pairingCode(fingerprint(keystoreB))}) {
                 try {
                     ServerClient.login(base, "ana@primjer.hr", "Sunce-2026-ploce", "", "", "", code);
                     fail("prijava bez ispravnog koda");
@@ -191,7 +192,7 @@ public class ServerClientTest {
                 // očekivano
             }
             try {
-                ServerClient.resetPassword(base, "ana@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", "", "AAAA-BBBB-CCCC");
+                ServerClient.resetPassword(base, "ana@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", "", "AAAAA-BBBBB-CCCCC-DDDDD");
                 fail("kod poslan bez ispravnog koda za uparivanje");
             } catch (ServerClient.PairingNeeded expected) {
                 // očekivano

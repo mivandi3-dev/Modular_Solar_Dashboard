@@ -657,7 +657,7 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", ""), CloudPairingNeeded);
     CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", "", {}, {}, "AAAA-BBBB-CCCC"), CloudPairingNeeded);
     const std::string code = pairing_code(cert.fingerprint);
-    REQUIRE(code.size() == 14);
+    REQUIRE(code.size() == 23);  // XXXXX-XXXXX-XXXXX-XXXXX (5.0.2: 100 bita)
     CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "krivo", "", {}, {}, code), CloudError);
     std::string loose = code;  // kod se smije upisati malim slovima i bez crtica
     loose.erase(std::remove(loose.begin(), loose.end(), '-'), loose.end());
@@ -690,8 +690,13 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     s.cloud_cert_pin = "00:" + cert.fingerprint.substr(3);
     CHECK_THROWS_WITH_AS(cloud_json(s, "/api/v1/info"), doctest::Contains("Certifikat poslužitelja se promijenio"), CloudError);
     CHECK(secret_requests == before);
-    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", s.cloud_cert_pin), CloudError);
+    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", s.cloud_cert_pin), CloudPairingNeeded);
     CHECK(secret_requests == before);
+    // 5.0.2 (audit A-06): ponovno uparivanje – uz zapamćen (drugi) otisak upisani kod s prozora poslužitelja potvrđuje novi
+    CHECK_THROWS_AS(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", s.cloud_cert_pin, {}, {}, "AAAAA-BBBBB-CCCCC-DDDDD"),
+                    CloudPairingNeeded);
+    CHECK(secret_requests == before);
+    CHECK(cloud_login(url, "ana@primjer.hr", "Sunce-2026-ploce", s.cloud_cert_pin, {}, {}, code).pin == cert.fingerprint);
 
     // obični HTTP s 127.0.0.1 (cloudflared) i dalje radi na istom portu
     Settings plain = s;
@@ -1766,6 +1771,35 @@ TEST_CASE("TOTP: provjera koda – ±30 s, isti kod ne vrijedi dvaput") {
     CHECK(normalize_recovery_code(" ABCD-efgh ") == "abcdefgh");
 }
 
+TEST_CASE("5.0.2 (audit C-12): pogrešni kodovi drugog koraka broje se po računu, ne po adresi") {
+    TempDir dir;
+    UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
+    std::vector<std::string> alerts;
+    st.set_alert_handler([&](const std::string& m) { alerts.push_back(m); });
+    UserInput in = person("ana@primjer.hr");
+    in.totp_required = true;
+    st.create(in, 0);
+    const std::time_t t = 1'800'000'000;
+    LoginResult r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t);
+    const Bytes secret = *from_base32(r.totp_secret);
+    REQUIRE(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t, totp_code(secret, totp_step(t))).status == LoginResult::Status::Ok);
+    // napadač zna lozinku i pogađa kod s 10 različitih adresa (po adresi ispod granice od 5)
+    LoginResult last;
+    for (int i = 0; i < kTotpMaxFailures; ++i) {
+        last = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t + 100 + i, "000000", {}, "net:10.0.0." + std::to_string(i));
+    }
+    CHECK(last.status == LoginResult::Status::Locked);
+    CHECK(last.totp_locked);  // obavijest vlasniku
+    CHECK(alerts.size() == 1);
+    // zaključano za sve adrese, i s točnim kodom, sat vremena
+    const std::time_t t2 = t + 200;
+    CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t2, totp_code(secret, totp_step(t2)), {}, "net:192.0.2.50").status ==
+          LoginResult::Status::Locked);
+    const std::time_t t3 = t + 100 + kTotpLockSeconds + 60;
+    CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t3, totp_code(secret, totp_step(t3)), {}, "net:192.0.2.50").status ==
+          LoginResult::Status::Ok);
+}
+
 TEST_CASE("korisnici 3.1: postavljanje dvofaktorske prijave QR kodom, prijava kodom, oporavak i poništavanje") {
     TempDir dir;
     UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
@@ -1774,18 +1808,24 @@ TEST_CASE("korisnici 3.1: postavljanje dvofaktorske prijave QR kodom, prijava ko
     const int64_t ana = st.create(in, 0);
     const std::time_t t = 1'800'000'000;
 
-    // lozinka točna, aplikacija još nije postavljena → QR kod (tajna se ne mijenja do potvrde)
+    // lozinka točna, aplikacija još nije postavljena → QR kod; 5.0.2 (audit C-10): svaki prikaz daje NOVU tajnu – tko
+    // zna lozinku ne može preuzeti tajnu koju je vlasnik već skenirao; potvrđuje se samo zadnja prikazana
     LoginResult r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t);
     REQUIRE(r.status == LoginResult::Status::TotpSetup);
     CHECK(r.token.empty());
     CHECK(r.totp_uri.rfind("otpauth://totp/", 0) == 0);
-    CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t).totp_secret == r.totp_secret);
+    const std::string first_secret = r.totp_secret;
+    r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t);
+    CHECK(r.totp_secret != first_secret);
+    CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t, totp_code(*from_base32(first_secret), totp_step(t))).status ==
+          LoginResult::Status::TotpInvalid);  // stara (preuzeta) tajna više ne vrijedi
     CHECK(st.login("ana@primjer.hr", "krivo", "", t).status == LoginResult::Status::BadCredentials);  // lozinka i dalje prva
     const Bytes secret = *from_base32(r.totp_secret);
     CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t, "000000").status == LoginResult::Status::TotpInvalid);
     r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t, totp_code(secret, totp_step(t)));
     REQUIRE(r.status == LoginResult::Status::Ok);
     CHECK(r.recovery_codes.size() == 8);
+    CHECK(r.totp_enrolled);  // obavijest vlasniku (C-10)
     CHECK(r.totp_secret.empty());
     CHECK(st.get(ana)->totp_enabled);
     CHECK(st.get(ana)->recovery_left == 8);

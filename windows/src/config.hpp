@@ -97,7 +97,10 @@ struct Settings {
     std::string cloud_url;          // npr. https://solar.tvrtka.hr ili https://192.168.1.20:8700
     std::string cloud_token_enc;    // 3.0: oznaka prijave korisnika (DPAPI) – lozinka se nikad ne sprema
     std::string cloud_account_enc;  // 3.0: {"email","name","role"} prijavljenog korisnika (DPAPI)
-    std::string cloud_cert_pin;     // 3.0: otisak certifikata poslužitelja u lokalnoj mreži (zapamćen pri prvoj prijavi)
+    std::string cloud_cert_pin;     // 3.0: otisak certifikata poslužitelja u lokalnoj mreži (zapamćen pri prijavi)
+    // 5.0.2 (audit W-08/W-12): SID korisnika Windowsa kojem broker predaje tajne sučelja (oznaka prijave, ključ pregleda);
+    // postavlja ga prijava na poslužitelj uz PIN – drugi lokalni korisnici tajne ne dobivaju
+    std::string secrets_owner_sid;
     // Solarni poslužitelj (SolarniServer.exe): port API-ja; server_lan=false → samo 127.0.0.1 (cloudflared)
     int server_port = 8700;
     bool server_lan = false;

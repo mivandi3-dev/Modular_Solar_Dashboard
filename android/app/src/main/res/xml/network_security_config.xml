@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 3.0: samo HTTPS. Cloudflare tunel provjerava se preko izdavača (sustavni certifikati); poslužitelj u lokalnoj
      mreži ima vlastiti certifikat koji ServerClient.java provjerava po otisku (SHA-256) zapamćenom pri prijavi.
-     Nešifrirani HTTP dopušten je samo prema samom uređaju (emulator/razvoj). -->
+     Izdanje (5.0.2, audit A-11): nigdje nešifrirani HTTP; razvojna gradnja ima vlastitu datoteku (src/debug). -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
 </network-security-config>

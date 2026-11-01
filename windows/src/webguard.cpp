@@ -59,7 +59,7 @@ bool settings_only_method(const std::string& method) {
         "cloud_forgot_password", "cloud_reset_password", "admin_forgot_password", "admin_reset_password",
         "user_save",       "user_set_disabled", "user_delete",    "user_reset_totp",   "user_reset_password", "user_logout_all",
         "get_report",      "save_report_csv",  "import_history",  "import_smartlogger", "choose_image",
-        "reset_image",     "open_folder",      "close",           "remote_view_new_key"};
+        "reset_image",     "open_folder",      "close",           "remote_view_new_key", "open_logs"};
     return kSettingsOnly.count(method) > 0;
 }
 
@@ -67,7 +67,7 @@ bool main_window_method(const std::string& method) {
     static const std::set<std::string> kMain = {
         "get_dashboard", "get_editor",  "save_layout",  "remove_page", "set_rotation",      "reset_layout",
         "set_display",   "set_sidebar", "toggle_fullscreen", "exit_fullscreen", "open_settings", "reload",
-        "quit",          "open_logs",   "window_control", "window_state", "get_i18n"};
+        "quit",          "window_control", "window_state", "get_i18n"};  // 5.0.2 (audit W-14): bez open_logs
     return kMain.count(method) > 0;
 }
 

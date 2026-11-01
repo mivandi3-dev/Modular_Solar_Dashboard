@@ -163,10 +163,16 @@ void WebViewWindow::create_controller() {
 
         ComPtr<ICoreWebView2Settings> settings;
         webview_->get_Settings(settings.put());
+#ifdef SOLARI_DEV_BUILD
         const bool debug = _wgetenv(L"SOLARI2_DEBUG") != nullptr;
+#else
+        const bool debug = false;  // 5.0.2 (audit W-15): u izdanju varijabla okoline ne otvara DevTools na javnom zaslonu
+#endif
         settings->put_AreDevToolsEnabled(debug);
         settings->put_AreDefaultContextMenusEnabled(debug);
         settings->put_IsStatusBarEnabled(FALSE);
+        settings->put_AreDefaultScriptDialogsEnabled(FALSE);  // 5.0.2 (audit W-16): bez alert/confirm/prompt preglednika
+        settings->put_AreHostObjectsAllowed(FALSE);           // aplikacija ne dodaje host objekte
         settings->put_IsZoomControlEnabled(FALSE);  // zoom određuje aplikacija (Full HD / 2K / 4K)
         ComPtr<ICoreWebView2Settings3> settings3;
         if (SUCCEEDED(settings->QueryInterface(IID_ICoreWebView2Settings3, reinterpret_cast<void**>(settings3.put())))) {

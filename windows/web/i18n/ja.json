@@ -140,7 +140,7 @@
   "Brzinomjer snage": "出力メーター",
   "COM3": "COM3",
   "CO₂ (kg po kWh)": "CO₂（kWh あたり kg）",
-  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet.": "サーバー証明書が変更されました。データを送信する前に接続を停止しました。サーバーを再インストールした場合は再度サインインしてください。そうでない場合、ネットワーク上の誰かが通信を傍受している可能性があります。",
+  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; inače netko u mreži možda presreće promet.": "サーバー証明書が変更されました。データ送信前に接続を停止しました。サーバーを再インストールした場合は、サーバー画面に表示される新しいペアリングコードを入力してください。そうでない場合、ネットワーク上で通信が傍受されている可能性があります。",
   "Cijeli zaslon": "全画面",
   "Cijeli zaslon uključi / isključi": "全画面の切り替え",
   "Cijena struje iz mreže": "系統電力の単価",

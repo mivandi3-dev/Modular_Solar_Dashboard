@@ -51,6 +51,7 @@ final class Prefs {
     /** Prijava vrijedi samo za adresu na koju je izdana. */
     boolean loggedIn() { return !serverUrl().isEmpty() && serverUrl().equals(sp.getString("login_url", "")) && !token().isEmpty(); }
     String certPin() { return loggedIn() ? sp.getString("cert_pin", "") : ""; }
+    String loginUrl() { return sp.getString("login_url", ""); }
     String knownPin(String url) { return url.equals(sp.getString("login_url", "")) ? sp.getString("cert_pin", "") : ""; }
 
     String token() { return decrypt(sp.getString("token_enc", "")); }

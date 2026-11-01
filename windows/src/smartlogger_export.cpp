@@ -31,7 +31,8 @@ void extract_zip(const fs::path& zip, const fs::path& dir) {
         for (size_t i = 0; (i = s.find(L'\'', i)) != std::wstring::npos; i += 2) s.insert(i, 1, L'\'');
         return L"'" + s + L"'";
     };
-    const std::wstring cmd = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \""
+    const std::wstring cmd = L"\"" + system32_path(L"WindowsPowerShell\\v1.0\\powershell.exe") +
+                             L"\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \""
                              L"$ProgressPreference='SilentlyContinue'; Expand-Archive -LiteralPath " + quote(zip.wstring()) +
                              L" -DestinationPath " + quote(dir.wstring()) + L" -Force\"";
     const ProcessResult r = run_capture(cmd, kExtractTimeoutMs);

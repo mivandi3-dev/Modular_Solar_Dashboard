@@ -94,8 +94,12 @@ if ($Mode -eq "client") {
     New-Item -ItemType Directory -Force $ui | Out-Null
     if (Test-Reparse $ui) { throw "ui\ je veza – instalacija se prekida." }
     # dozvola samo na mapi ui\ (bez /T): datoteke i podmape je nasljeđuju nakon /reset iz koraka 3
-    & icacls.exe $ui /grant "*$($USERS):(OI)(CI)M" /C /L /Q | Out-Null
+    # 5.0.2 (audit W-05): na samoj mapi ui\ korisnici smiju samo čitati i dodavati (bez brisanja ili zamjene mape);
+    # izmjena vrijedi samo za sadržaj (IO = samo nasljeđivanje)
+    & icacls.exe $ui /grant "*$($USERS):(RX,WD,AD)" /C /L /Q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "icacls (ui): $LASTEXITCODE" }
+    & icacls.exe $ui /grant "*$($USERS):(OI)(CI)(IO)M" /C /L /Q | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "icacls (ui, sadržaj): $LASTEXITCODE" }
 }
 
 if ($AppDir) {

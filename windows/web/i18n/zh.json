@@ -140,7 +140,7 @@
   "Brzinomjer snage": "功率仪表",
   "COM3": "COM3",
   "CO₂ (kg po kWh)": "CO₂（每 kWh 千克）",
-  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet.": "服务器证书已更改——连接在发送任何数据之前已中断。如果您重新安装了服务器，请重新登录；否则网络中可能有人在拦截流量。",
+  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; inače netko u mreži možda presreće promet.": "服务器证书已更改——在发送任何数据之前已中断连接。如果您重新安装了服务器，请输入服务器窗口中的新配对码；否则可能有人在网络中拦截通信。",
   "Cijeli zaslon": "全屏",
   "Cijeli zaslon uključi / isključi": "切换全屏",
   "Cijena struje iz mreže": "电网电价",

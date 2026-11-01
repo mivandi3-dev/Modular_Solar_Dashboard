@@ -131,22 +131,66 @@ std::string broker_home_problem() {
 BrokerCore::BrokerCore(Interfaces interfaces, Clock clock)
     : interfaces_(std::move(interfaces)), clock_(clock ? std::move(clock) : Clock([] { return now(); })) {}
 
-json BrokerCore::state(const Settings& s) const {
+void BrokerCore::claim_secrets(Settings& s, const std::wstring& caller) {
+    if (!s.secrets_owner_sid.empty() || caller.empty()) return;
+    if (s.cloud_token_enc.empty() && s.remote_view_key_enc.empty()) return;
+    // nadogradnja s 5.0.1: tajne postoje, a vlasnik još nije zapisan – preuzima ih prvi korisnik koji pokrene sučelje
+    // (u pravilu korisnik zaslona, autostart); svaki sljedeći drugi korisnik ih više ne dobiva
+    s.secrets_owner_sid = narrow(caller);
+    save_settings(s);
+    log_warn("Broker: tajne sučelja vezane uz korisnika " + s.secrets_owner_sid + " (nadogradnja)");
+}
+
+json BrokerCore::state(const Settings& s, const std::wstring& caller) const {
     const std::time_t t = clock_();
+    const bool owner = !s.secrets_owner_sid.empty() && s.secrets_owner_sid == narrow(caller);
+    json secrets = json::object();
+    if (owner) {
+        secrets = {{"cloud_token_enc", s.cloud_token_enc}, {"cloud_account_enc", s.cloud_account_enc},
+                   {"remote_view_key_enc", s.remote_view_key_enc}};
+    } else {
+        secrets = {{"cloud_token_enc", ""}, {"cloud_account_enc", ""}, {"remote_view_key_enc", ""}};
+    }
     return {{"ok", true},
             {"pin_set", !s.settings_pin_hash.empty()},
             {"locked_s", locked_until_ > t ? locked_until_ - t : 0},
             {"smtp_password_set", !s.smtp_password_enc.empty()},
             {"resend_api_key_set", !s.resend_api_key_enc.empty()},
             {"configured", is_configured()},
-            // tajne koje sučelje treba (DPAPI računala): prijava na poslužitelj i ključ pregleda iz mreže; SMTP lozinka ne
-            {"secrets", {{"cloud_token_enc", s.cloud_token_enc}, {"cloud_account_enc", s.cloud_account_enc},
-                         {"remote_view_key_enc", s.remote_view_key_enc}}},
+            // tajne koje sučelje treba (DPAPI računala): prijava na poslužitelj i ključ pregleda iz mreže – samo vlasniku
+            // (korisnik koji se prijavio uz PIN); SMTP lozinka i ključ Resenda nikad
+            {"secrets", secrets},
+            {"secrets_owner", owner},
             {"settings", strip_secrets(to_json(s))}};
+}
+
+void BrokerCore::load_pin_state() {
+    if (pin_state_loaded_) return;
+    pin_state_loaded_ = true;
+    if (const auto text = read_file(secrets_dir() / L"broker_state.json")) {
+        const json j = json::parse(*text, nullptr, false);
+        if (j.is_object()) {
+            failures_ = std::clamp(j.value("failures", 0), 0, kBrokerMaxPinFailures);
+            lockouts_ = std::clamp(j.value("lockouts", 0), 0, 64);
+            locked_until_ = std::max<std::time_t>(0, j.value("locked_until", std::time_t{0}));
+        }
+    }
+}
+
+void BrokerCore::save_pin_state() const {
+    try {
+        create_private_dir(secrets_dir());
+        if (!no_reparse_points(secrets_dir())) return;
+        write_file_atomic(secrets_dir() / L"broker_state.json",
+                          json{{"failures", failures_}, {"lockouts", lockouts_}, {"locked_until", locked_until_}}.dump());
+    } catch (const std::exception& e) {
+        log_warn(std::string("Broker: stanje PIN-a nije spremljeno: ") + e.what());
+    }
 }
 
 std::optional<json> BrokerCore::check_pin(const json& request, const Settings& s) {
     const std::time_t t = clock_();
+    load_pin_state();
     if (s.settings_pin_hash.empty()) {
         return fail("pin_not_set", tr("PIN postavki nije postavljen. Pokrenite instalaciju Solarnog monitora ponovno (popravak) i upišite PIN."));
     }
@@ -156,8 +200,11 @@ std::optional<json> BrokerCore::check_pin(const json& request, const Settings& s
     }
     const auto pin = str_field(request, "pin", 64);
     if (pin && sm::check_pin(*pin, s.settings_pin_hash)) {
-        failures_ = 0;
-        lockouts_ = 0;
+        if (failures_ || lockouts_) {
+            failures_ = 0;
+            lockouts_ = 0;
+            save_pin_state();
+        }
         return std::nullopt;
     }
     if (++failures_ >= kBrokerMaxPinFailures) {
@@ -169,11 +216,13 @@ std::optional<json> BrokerCore::check_pin(const json& request, const Settings& s
         locked_until_ = t + span;
         log_warn("Broker: previše pogrešnih PIN-ova – izmjene zaključane " + std::to_string(span / 60) + " min");
     }
+    save_pin_state();
     return fail("pin_invalid", tr("Pogrešan PIN."));
 }
 
 json BrokerCore::handle(const json& request, const std::wstring& caller_sid) {
     std::lock_guard lock(mutex_);
+    load_pin_state();
     const auto op = str_field(request, "op", 32);
     if (!op) return bad_request();
     Settings s = load_settings();
@@ -187,7 +236,8 @@ json BrokerCore::handle(const json& request, const std::wstring& caller_sid) {
             save_settings(s);
             log_info("Broker: izrađen ključ pregleda iz mreže");
         }
-        return state(s);
+        claim_secrets(s, caller_sid);
+        return state(s, caller_sid);
     }
     if (*op == "check_pin") {
         if (auto e = check_pin(request, s)) return *e;
@@ -222,7 +272,7 @@ json BrokerCore::handle(const json& request, const std::wstring& caller_sid) {
             return fail("mail", e.what());
         }
     }
-    if (*op == "cloud_login") return store_cloud_login(request);
+    if (*op == "cloud_login") return store_cloud_login(request, caller_sid);
     if (*op == "import_rows") return import_rows(request);
     if (*op == "import_days") return import_days(request);
     if (*op == "cloud_logout" || *op == "remote_view_new_key") {
@@ -237,9 +287,10 @@ json BrokerCore::handle(const json& request, const std::wstring& caller_sid) {
             s.remote_view_key_enc = protect_secret(key);
             wipe(key);
         }
+        if (*op == "remote_view_new_key") s.secrets_owner_sid = narrow(caller_sid);  // novi ključ uz PIN – vlasnik je pozivatelj
         save_settings(s);
         log_info("Broker: " + *op + " (" + narrow(caller_sid) + ")");
-        return state(s);
+        return state(s, caller_sid);
     }
     return bad_request();
 }
@@ -260,10 +311,10 @@ json BrokerCore::save_form(const json& request, const std::wstring& caller) {
     }
     save_settings(*v.settings);
     log_info("Broker: postavke spremljene (" + narrow(caller) + ")");
-    return state(*v.settings);
+    return state(*v.settings, caller);
 }
 
-json BrokerCore::store_cloud_login(const json& request) {
+json BrokerCore::store_cloud_login(const json& request, const std::wstring& caller) {
     Settings s = load_settings();
     if (auto e = check_pin(request, s)) return *e;
     static const std::regex token_re(R"(^[A-Za-z0-9_\-]{16,512}$)");
@@ -281,9 +332,10 @@ json BrokerCore::store_cloud_login(const json& request) {
     s.cloud_token_enc = protect_secret(*token);
     s.cloud_account_enc = protect_secret(account_text);
     s.cloud_cert_pin = *cert_pin;
+    s.secrets_owner_sid = narrow(caller);  // 5.0.2 (audit W-08/W-12): oznaku dobiva samo korisnik koji se prijavio uz PIN
     save_settings(s);
-    log_info("Broker: prijava na poslužitelj " + *normalized + " spremljena");
-    return state(s);
+    log_info("Broker: prijava na poslužitelj " + *normalized + " spremljena (" + s.secrets_owner_sid + ")");
+    return state(s, caller);
 }
 
 json BrokerCore::import_rows(const json& request) {

@@ -16,6 +16,8 @@ struct ProcessResult {
 // curl.exe iz mape programa (instalacija ga donosi – Windows Server 2016 / Win10 prije 1803 ga nemaju),
 // a ako ga nema, onaj iz Windowsa. Vraća naredbu u navodnicima, spremnu za naredbeni redak.
 std::wstring curl_command();
+// Puna putanja u mapi sustava (System32) – za pokretanje alata sustava bez redoslijeda traženja (audit C-16)
+std::wstring system32_path(const std::wstring& relative);
 
 // Neuhvaćena iznimka ili rušenje (npr. pristup memoriji) upiše se u otvoreni zapisnik prije izlaska –
 // za procese bez prozora (poslužitelj, poller), da se uzrok vidi i kad nitko ne gleda.

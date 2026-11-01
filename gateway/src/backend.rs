@@ -15,6 +15,7 @@ use tokio::time::timeout;
 pub const MAX_CONNECTIONS: usize = 8;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 const CALL_TIMEOUT: Duration = Duration::from_secs(15);
+const ADMISSION_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ListenConfig {
@@ -33,6 +34,7 @@ pub struct Backend {
     hello: Value,
     pool: Mutex<Vec<Conn>>,
     slots: Semaphore,
+    config_slot: Semaphore,
     next_id: AtomicU64,
 }
 
@@ -44,7 +46,8 @@ impl Backend {
             hello: json!({"type": "hello", "fingerprint": fingerprint, "not_after": not_after,
                           "version": env!("CARGO_PKG_VERSION")}),
             pool: Mutex::new(Vec::new()),
-            slots: Semaphore::new(MAX_CONNECTIONS),
+            slots: Semaphore::new(MAX_CONNECTIONS - 1),
+            config_slot: Semaphore::new(1),
             next_id: AtomicU64::new(1),
         })
     }
@@ -92,7 +95,15 @@ impl Backend {
 
     /// Jedan zahtjev; ako postojeća veza više ne vrijedi (servis ponovno pokrenut), jedan pokušaj s novom vezom.
     pub async fn call(&self, msg: Value) -> io::Result<Value> {
-        let _slot = self.slots.acquire().await.map_err(|_| io::Error::other("zatvoreno"))?;
+        // 5.0.2 (audit G-04): najviše 2 s čekanja na slobodan poziv; config (nadzor porta) ima vlastiti rezervirani poziv
+        let _slot = if msg["type"] == "config" {
+            self.config_slot.acquire().await.map_err(|_| io::Error::other("zatvoreno"))?
+        } else {
+            match timeout(ADMISSION_TIMEOUT, self.slots.acquire()).await {
+                Ok(s) => s.map_err(|_| io::Error::other("zatvoreno"))?,
+                Err(_) => return Err(io::Error::new(io::ErrorKind::WouldBlock, "svi pozivi servisa su zauzeti")),
+            }
+        };
         let pooled = self.pool.lock().await.pop();
         let (mut conn, fresh) = match pooled {
             Some(c) => (c, false),
@@ -108,7 +119,11 @@ impl Backend {
             }
             other => other,
         };
-        if result.is_ok() {
+        let reusable = match &result {
+            Ok(_) => true,
+            Err(e) => e.kind() == io::ErrorKind::InvalidInput, // ništa nije poslano – veza je ispravna
+        };
+        if reusable {
             let mut pool = self.pool.lock().await;
             if pool.len() < MAX_CONNECTIONS {
                 pool.push(conn);

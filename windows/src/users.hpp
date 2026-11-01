@@ -46,6 +46,15 @@ inline constexpr const char* kLoginSourceLocal = "local";
 inline constexpr int kAccountSoftLimit = 50;
 inline constexpr std::time_t kAccountWindowSeconds = 24 * 3600;
 inline constexpr std::time_t kThrottleSeconds = 60;
+// 5.0.2 (audit C-12): iznad kAccountSoftLimit i ukupno (svi izvori zajedno) najviše jedan pokušaj u 10 s
+inline constexpr std::time_t kAccountGlobalSeconds = 10;
+// 5.0.2 (audit C-12): pogrešni kodovi drugog koraka broje se po RAČUNU (ne po adresi) – nakon 10 drugi korak se
+// zaključava na 1 h, svako sljedeće zaključavanje dvostruko dulje (najviše 24 h); vlasnik i administrator dobivaju poruku
+inline constexpr int kTotpMaxFailures = 10;
+inline constexpr std::time_t kTotpLockSeconds = 3600;
+inline constexpr std::time_t kTotpLockMaxSeconds = 24 * 3600;
+// 5.0.2 (audit C-03): najviše toliko PBKDF2 izračuna istodobno (izvan zajedničke brave korisnika)
+inline constexpr int kPbkdf2Parallel = 2;
 // Zaboravljena lozinka (4.0, samoposluživanje): kod XXXX-XXXX (8 znakova base32, 40 bita) e-poštom; vrijedi 30 min,
 // najviše 5 pogrešnih pokušaja po kodu, novi kod najranije za 2 min. Stara lozinka vrijedi dok se kod ne iskoristi
 // (zahtjev ne može zaključati tuđi račun); u bazi samo PBKDF2 koda. Svaka promjena lozinke poništava neiskorišteni kod.
@@ -120,6 +129,8 @@ struct LoginResult {
     std::optional<UserInfo> user;
     std::string totp_secret, totp_uri;        // samo pri postavljanju (TotpSetup, TotpInvalid prije postavljanja)
     std::vector<std::string> recovery_codes;  // samo jednom – odmah nakon postavljanja
+    bool totp_enrolled = false;  // 5.0.2 (audit C-10): upravo postavljena dvofaktorska prijava – obavijest vlasniku
+    bool totp_locked = false;    // 5.0.2 (audit C-12): drugi korak je upravo zaključan – obavijest vlasniku
 };
 
 class UserStore {
@@ -171,6 +182,9 @@ private:
     void revoke_sessions(int64_t id);
     bool second_factor(const Row& r, const std::string& code, std::time_t now, LoginResult& res);
     void count_failure(const Row& r, std::time_t now, LoginResult& res, LoginResult::Status status);
+    void totp_failure(const Row& r, std::time_t now, LoginResult& res);  // 5.0.2 (audit C-12): brojač po računu
+    bool totp_locked(const Row& r, std::time_t now);
+    void totp_success(const Row& r);
     struct SourceState {
         int failed = 0;
         std::time_t locked_until = 0, last_attempt = 0;

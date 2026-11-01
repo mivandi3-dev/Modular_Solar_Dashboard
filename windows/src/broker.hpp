@@ -39,11 +39,13 @@ public:
     json handle(const json& request, const std::wstring& caller_sid);
 
 private:
-    json state(const Settings& s) const;
+    json state(const Settings& s, const std::wstring& caller) const;
+    // 5.0.2 (audit W-08/W-12): tajne sučelja samo vlasniku (SID); prazan vlasnik uz postojeće tajne → prvi pozivatelj
+    void claim_secrets(Settings& s, const std::wstring& caller);
     // nullopt = PIN je ispravan; inače odgovor s greškom (pin_required, pin_invalid, locked)
     std::optional<json> check_pin(const json& request, const Settings& s);
     json save_form(const json& request, const std::wstring& caller);
-    json store_cloud_login(const json& request);
+    json store_cloud_login(const json& request, const std::wstring& caller);
     json import_rows(const json& request);
     json import_days(const json& request);
 
@@ -53,6 +55,11 @@ private:
     int failures_ = 0;
     int lockouts_ = 0;  // uzastopna zaključavanja bez ispravnog PIN-a
     std::time_t locked_until_ = 0;
+    // 5.0.2 (audit C-14): brojači PIN-a u secretsroker_state.json (SYSTEM + administratori) – ponovno pokretanje
+    // računala ih ne poništava
+    bool pin_state_loaded_ = false;
+    void load_pin_state();
+    void save_pin_state() const;
 };
 
 // Zadatak sustava: kanal brokera (baca ako ime već postoji – drugi proces drži kanal).

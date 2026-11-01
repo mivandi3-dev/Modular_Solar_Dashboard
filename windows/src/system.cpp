@@ -143,11 +143,20 @@ void install_crash_logging(const char* process_name) {
     });
 }
 
+std::wstring system32_path(const std::wstring& relative) {
+    wchar_t dir[MAX_PATH]{};
+    const UINT n = GetSystemDirectoryW(dir, MAX_PATH);
+    const std::wstring base = n > 0 && n < MAX_PATH ? std::wstring(dir, n) : L"C:\\Windows\\System32";
+    return base + L"\\" + relative;
+}
+
 std::wstring curl_command() {
     const fs::path bundled = exe_dir() / L"curl" / L"curl.exe";
     std::error_code ec;
     // Ugrađeni curl (LibreSSL) provjerava HTTPS certifikate iz spremišta Windowsa; curl iz Windowsa (Schannel) to radi sam.
-    return fs::is_regular_file(bundled, ec) ? L"\"" + bundled.wstring() + L"\" --ca-native" : L"curl.exe";
+    // 5.0.2 (audit W-13 / C-16): rezerva je samo System32\curl.exe – nikad "curl.exe" iz trenutne mape ili PATH-a
+    return fs::is_regular_file(bundled, ec) ? L"\"" + bundled.wstring() + L"\" --ca-native"
+                                            : L"\"" + system32_path(L"curl.exe") + L"\"";
 }
 
 void keep_awake(bool enabled, bool display_on) {

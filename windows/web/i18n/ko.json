@@ -140,7 +140,7 @@
   "Brzinomjer snage": "출력 게이지",
   "COM3": "COM3",
   "CO₂ (kg po kWh)": "CO₂(kWh당 kg)",
-  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet.": "서버 인증서가 변경되었습니다. 데이터를 보내기 전에 연결을 중단했습니다. 서버를 다시 설치했다면 다시 로그인하세요. 그렇지 않다면 네트워크의 누군가가 트래픽을 가로채고 있을 수 있습니다.",
+  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; inače netko u mreži možda presreće promet.": "서버 인증서가 변경되었습니다. 데이터를 보내기 전에 연결을 중단했습니다. 서버를 다시 설치했다면 서버 창의 새 페어링 코드를 입력하세요. 그렇지 않다면 네트워크에서 누군가 트래픽을 가로채고 있을 수 있습니다.",
   "Cijeli zaslon": "전체 화면",
   "Cijeli zaslon uključi / isključi": "전체 화면 켜기 / 끄기",
   "Cijena struje iz mreže": "계통 전력 요금",

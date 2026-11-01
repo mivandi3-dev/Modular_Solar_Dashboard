@@ -140,7 +140,7 @@
   "Brzinomjer snage": "Indicatore di potenza",
   "COM3": "COM3",
   "CO₂ (kg po kWh)": "CO₂ (kg per kWh)",
-  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet.": "Il certificato del server è cambiato – la connessione è stata interrotta prima dell'invio dei dati. Se hai reinstallato il server, accedi di nuovo; altrimenti qualcuno nella rete potrebbe intercettare il traffico.",
+  "Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; inače netko u mreži možda presreće promet.": "Il certificato del server è cambiato – la connessione è stata interrotta prima di inviare dati. Se hai reinstallato il server, inserisci il nuovo codice di associazione dalla finestra del server; altrimenti qualcuno in rete potrebbe intercettare il traffico.",
   "Cijeli zaslon": "Schermo intero",
   "Cijeli zaslon uključi / isključi": "Attiva / disattiva schermo intero",
   "Cijena struje iz mreže": "Prezzo dell'energia dalla rete",

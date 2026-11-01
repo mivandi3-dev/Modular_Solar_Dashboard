@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(SolarniMonitor2 VERSION 5.0.1 LANGUAGES C CXX RC)
+project(SolarniMonitor2 VERSION 5.0.2 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,7 +49,7 @@ endif()
 # ---------------------------------------------------------------- aplikacija
 add_executable(SolarniMonitor WIN32 src/main.cpp src/app.cpp src/webview.cpp src/bridge.cpp res/app.rc)
 target_link_libraries(SolarniMonitor PRIVATE solari_core)
-target_link_options(SolarniMonitor PRIVATE -static -municode)
+target_link_options(SolarniMonitor PRIVATE -static -municode -Wl,--dependent-load-flag=0x800)  # 5.0.2 (I-12): DLL samo iz System32
 
 # Web sučelje, zadane slike i WebView2Loader.dll idu pokraj .exe (sinkronizira se pri svakoj izgradnji)
 add_custom_target(runtime_files ALL
@@ -71,7 +71,7 @@ if(SOLARI_DEV_NO_UAC)
     target_compile_definitions(solari_core PUBLIC SOLARI_DEV_BUILD)
 endif()
 target_link_libraries(SolarniServer PRIVATE solari_core)
-target_link_options(SolarniServer PRIVATE -static -municode)
+target_link_options(SolarniServer PRIVATE -static -municode -Wl,--dependent-load-flag=0x800)
 add_dependencies(SolarniServer runtime_files)
 
 # ---------------------------------------------------------------- testovi (doctest)

@@ -35,7 +35,7 @@ final class ServerClient {
     record Login(String token, String pin, JSONObject account, org.json.JSONArray recoveryCodes) {}
 
     /** Greška za korisnika (hrvatski ključ za T() u sučelju). */
-    static final class ServerException extends IOException {
+    static class ServerException extends IOException {
         ServerException(String message) { super(message); }
     }
 
@@ -49,13 +49,21 @@ final class ServerClient {
         PairingNeeded(String message) { super(message); }
     }
 
-    /** Kod za uparivanje: prvih 60 bita SHA-256 otiska ("AB:CD:…") u base32 → "XXXX-XXXX-XXXX"; "" za neispravan otisak. */
+    /** 5.0.2 (audit A-05/G-07): certifikat poslužitelja se promijenio – ponovno uparivanje kodom s prozora poslužitelja. */
+    static final class CertChanged extends ServerException {
+        CertChanged(String message) { super(message); }
+    }
+
+    /** Duljina koda za uparivanje (5.0.2, audit A-05/G-07): 100 bita SHA-256 otiska → 20 znakova base32 "XXXXX-XXXXX-XXXXX-XXXXX". */
+    static final int PAIRING_CHARS = 20;
+
+    /** Kod za uparivanje: prvih 100 bita SHA-256 otiska ("AB:CD:…") u base32 → "XXXXX-XXXXX-XXXXX-XXXXX"; "" za neispravan otisak. */
     static String pairingCode(String fingerprint) {
         String[] parts = fingerprint == null ? new String[0] : fingerprint.split(":");
         if (parts.length != 32) return "";
-        byte[] first = new byte[8];
+        byte[] first = new byte[13];
         try {
-            for (int i = 0; i < 8; i++) first[i] = (byte) Integer.parseInt(parts[i], 16);
+            for (int i = 0; i < first.length; i++) first[i] = (byte) Integer.parseInt(parts[i], 16);
         } catch (NumberFormatException e) {
             return "";
         }
@@ -65,12 +73,13 @@ final class ServerClient {
         for (byte x : first) {
             buffer = (buffer << 8) | (x & 0xFF);
             bits += 8;
-            while (bits >= 5 && b32.length() < 12) {
+            while (bits >= 5 && b32.length() < PAIRING_CHARS) {
                 b32.append(alphabet.charAt((buffer >> (bits - 5)) & 31));
                 bits -= 5;
             }
+            buffer &= (1 << bits) - 1;  // samo neiskorišteni bitovi (bez preljeva int-a)
         }
-        return b32.substring(0, 4) + "-" + b32.substring(4, 8) + "-" + b32.substring(8, 12);
+        return b32.substring(0, 5) + "-" + b32.substring(5, 10) + "-" + b32.substring(10, 15) + "-" + b32.substring(15, 20);
     }
 
     /** Upisani kod (mala/velika slova, s crticama ili bez) odgovara otisku – usporedba u stalnom vremenu. */
@@ -171,7 +180,7 @@ final class ServerClient {
             return new Fetched(status, type, data, trust == null ? "" : trust.seen);
         } catch (javax.net.ssl.SSLException e) {
             if (trust != null && !trust.expected.isEmpty() && !trust.seen.isEmpty() && !trust.expected.equals(trust.seen)) {
-                throw new ServerException("Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet.");
+                throw new CertChanged("Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; inače netko u mreži možda presreće promet.");
             }
             throw new ServerException("Sigurna veza (HTTPS) s poslužiteljem nije uspjela.");
         } finally {
@@ -192,6 +201,7 @@ final class ServerClient {
 
     /** 5.0.1 (audit A-03): točno ime hosta (ne prefiks niza – http://localhost.napadac.tld nije loopback). */
     static boolean isLoopback(String base) {
+        if (!BuildConfig.DEBUG) return false;  // 5.0.2 (audit A-11): u izdanju nema običnog HTTP-a ni prema loopbacku
         if (base == null || !base.startsWith("http://")) return false;
         try {
             String host = new java.net.URI(base).getHost();
@@ -208,22 +218,9 @@ final class ServerClient {
 
     static Login login(String base, String email, String password, String knownPin, String totp, String newPassword,
                        String enteredPairingCode) throws IOException {
-        Fetched p = request(base, "/api/v1/ping", "GET", "", null, knownPin);
-        JSONObject info;
-        try {
-            info = new JSONObject(new String(p.body(), StandardCharsets.UTF_8));
-        } catch (JSONException e) {
-            throw new ServerException("Odgovor nije od Solarnog poslužitelja – provjerite adresu.");
-        }
-        if (p.status() != 200 || info.optInt("api", 0) < 4) throw new ServerException("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.");
-        if (!info.optBoolean("setup", false)) throw new ServerException("Poslužitelj još nema administratora – otvorite Solarni poslužitelj i izradite ga.");
-        String pin = pinnedHost(base) ? p.certPin() : "";
-        // SMA-04: prvi kontakt u lokalnoj mreži – otisak se potvrđuje kodom s prozora poslužitelja; bez toga se lozinka ne šalje
-        if (pinnedHost(base) && (knownPin == null || knownPin.isEmpty()) && !pairingMatches(enteredPairingCode, pin)) {
-            throw new PairingNeeded(enteredPairingCode == null || enteredPairingCode.trim().isEmpty()
-                    ? "Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj)."
-                    : "Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze).");
-        }
+        Ping ping = ping(base, knownPin, enteredPairingCode);
+        if (!ping.info.optBoolean("setup", false)) throw new ServerException("Poslužitelj još nema administratora – otvorite Solarni poslužitelj i izradite ga.");
+        String pin = ping.pin;
         String body;
         try {
             body = new JSONObject().put("email", email.trim()).put("password", password).put("device", "Solarni monitor (Android)")
@@ -271,7 +268,25 @@ final class ServerClient {
 
     /** /ping (verzija 4) i SMA-04 uparivanje – isto kao prijava; vraća otisak za sljedeći poziv ("" = javni certifikat). */
     static String confirmedPin(String base, String knownPin, String enteredPairingCode) throws IOException {
-        Fetched p = request(base, "/api/v1/ping", "GET", "", null, knownPin);
+        return ping(base, knownPin, enteredPairingCode).pin;
+    }
+
+    private record Ping(String pin, JSONObject info) {}
+
+    /**
+     * /ping (verzija 4) i SMA-04 uparivanje: prvi kontakt u lokalnoj mreži potvrđuje se kodom s prozora poslužitelja; bez
+     * toga se lozinka ne šalje. 5.0.2 (audit A-06): upisani kod pokreće ponovno uparivanje i kad je otisak od prije
+     * (npr. ponovno instaliran poslužitelj) – novi otisak vrijedi samo ako mu kod odgovara.
+     */
+    private static Ping ping(String base, String knownPin, String enteredPairingCode) throws IOException {
+        boolean repair = enteredPairingCode != null && !enteredPairingCode.isBlank();
+        boolean known = knownPin != null && !knownPin.isEmpty();
+        Fetched p;
+        try {
+            p = request(base, "/api/v1/ping", "GET", "", null, repair ? "" : (known ? knownPin : ""));
+        } catch (CertChanged e) {
+            throw new PairingNeeded(e.getMessage());
+        }
         JSONObject info;
         try {
             info = new JSONObject(new String(p.body(), StandardCharsets.UTF_8));
@@ -280,12 +295,12 @@ final class ServerClient {
         }
         if (p.status() != 200 || info.optInt("api", 0) < 4) throw new ServerException("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.");
         String pin = pinnedHost(base) ? p.certPin() : "";
-        if (pinnedHost(base) && (knownPin == null || knownPin.isEmpty()) && !pairingMatches(enteredPairingCode, pin)) {
-            throw new PairingNeeded(enteredPairingCode == null || enteredPairingCode.trim().isEmpty()
+        if (pinnedHost(base) && (repair || !known) && !pairingMatches(enteredPairingCode, pin)) {
+            throw new PairingNeeded(!repair
                     ? "Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj)."
                     : "Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze).");
         }
-        return pin;
+        return new Ping(pin, info);
     }
 
     private static JSONObject jsonBody(Fetched r) throws ServerException {

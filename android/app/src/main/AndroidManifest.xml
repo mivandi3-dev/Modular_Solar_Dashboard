@@ -3,6 +3,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- 5.0.2 (audit A-07): vidljivost aplikacija autentifikatora (otpauth://) za predaju TOTP tajne samo poznatim aplikacijama -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="otpauth" />
+        </intent>
+    </queries>
+
     <!-- Promet: samo HTTPS (poslužitelj u lokalnoj mreži s uparenim otiskom certifikata, Cloudflare tunel preko CA);
          obični HTTP samo za 127.0.0.1/localhost (network_security_config.xml). Bez sigurnosne kopije i prijenosa
          podataka na drugi uređaj (allowBackup, dataExtractionRules – oznaka prijave je vezana uz Android Keystore). -->

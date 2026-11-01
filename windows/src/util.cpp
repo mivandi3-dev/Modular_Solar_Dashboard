@@ -102,7 +102,13 @@ fs::path ui_dir() { return home_dir() / L"ui"; }
 fs::path secrets_dir() { return home_dir() / L"secrets"; }
 fs::path layout_file() { return ui_dir() / L"layout.json"; }
 fs::path images_dir() { return ui_dir() / L"images"; }
-fs::path logs_dir() { return ui_dir() / L"logs"; }
+// 5.0.2 (audit W-05): zapisnik sučelja u mapi korisnika (%LOCALAPPDATA%) – ne u zajedničkoj ui\, gdje bi drugi korisnik
+// računala mogao podmetnuti vezu pa bi ovaj korisnik pisao (i preimenovao) datoteke na mjestu koje odabere napadač
+fs::path logs_dir() {
+    const fs::path user = webview_user_data_dir();
+    if (user.parent_path().empty() || user.parent_path() == home_dir()) return ui_dir() / L"logs";
+    return user.parent_path() / L"logs";
+}
 
 void migrate_ui_files() {
     std::error_code ec;

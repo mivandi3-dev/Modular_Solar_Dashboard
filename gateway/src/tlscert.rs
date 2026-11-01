@@ -23,19 +23,21 @@ pub fn fingerprint(der: &[u8]) -> String {
     Sha256::digest(der).iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":")
 }
 
-/// Kod za uparivanje (prvih 60 bita otiska u base32, XXXX-XXXX-XXXX) – za zapis i testove; prikazuje ga C++.
+/// Kod za uparivanje (5.0.2, audit G-07: prvih 100 bita otiska u base32, XXXXX-XXXXX-XXXXX-XXXXX) – za zapis i
+/// testove; prikazuje ga C++.
 pub fn pairing_code(fingerprint: &str) -> Option<String> {
     let bytes: Vec<u8> = fingerprint.split(':').map(|h| u8::from_str_radix(h, 16)).collect::<Result<_, _>>().ok()?;
     if bytes.len() != 32 {
         return None;
     }
     const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    let mut bits: u64 = 0;
-    for b in &bytes[..8] {
-        bits = (bits << 8) | u64::from(*b);
+    let mut bits: u128 = 0;
+    for b in &bytes[..13] {
+        bits = (bits << 8) | u128::from(*b);
     }
-    let code: String = (0..12).map(|i| ALPHABET[((bits >> (59 - i * 5)) & 31) as usize] as char).collect();
-    Some(format!("{}-{}-{}", &code[0..4], &code[4..8], &code[8..12]))
+    // 104 bita učitano, koristi se prvih 100
+    let code: String = (0..20).map(|i| ALPHABET[((bits >> (99 - i * 5)) & 31) as usize] as char).collect();
+    Some(format!("{}-{}-{}-{}", &code[0..5], &code[5..10], &code[10..15], &code[15..20]))
 }
 
 fn date_text(t: OffsetDateTime) -> String {
@@ -136,7 +138,7 @@ mod tests {
     fn pairing_code_vector() {
         // isti vektor kao C++ (tls.cpp): prvih 8 bajtova SHA-256("abc") = BA7816BF8F01CFEA
         let code = pairing_code(&fingerprint(b"abc")).unwrap();
-        assert_eq!(code, "XJ4B-NP4P-AHH6");
+        assert_eq!(code, "XJ4BN-P4PAH-H6UQK-BIDPF");
         assert!(pairing_code("AB:CD").is_none());
     }
 

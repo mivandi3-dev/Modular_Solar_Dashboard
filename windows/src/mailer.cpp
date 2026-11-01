@@ -159,6 +159,12 @@ MailContent password_reset_mail(const std::string& code, const std::string& firs
 }
 
 MailContent password_changed_mail(const std::string& first_name, const std::string& email, const std::string& plant_name, std::time_t when) {
+    return security_notice_mail(SecurityNotice::PasswordReset, first_name, email, plant_name, when);
+}
+
+MailContent security_notice_mail(SecurityNotice kind, const std::string& first_name, const std::string& email,
+                                 const std::string& plant_name, std::time_t when) {
+    if (kind == SecurityNotice::PasswordReset) {
     const std::string hello = first_name.empty() ? "Hello," : "Hello " + first_name + ",";
     const std::string plant = plant_name.empty() ? "Solar Dashboard" : plant_name;
     MailContent m;
@@ -173,6 +179,42 @@ MailContent password_changed_mail(const std::string& first_name, const std::stri
     m.text = hello + "\n\nThe password of your account " + email + " on " + plant + " was changed with a one-time code on " +
              mail_utc_text(when) + ". All devices were signed out.\n\nIf this was not you, request a new code with Forgot password "
              "right away and contact your administrator.\n";
+    return m;
+    }
+    const std::string hello = first_name.empty() ? "Hello," : "Hello " + first_name + ",";
+    const std::string plant = plant_name.empty() ? "Solar Dashboard" : plant_name;
+    std::string title, what, advice;
+    switch (kind) {
+    case SecurityNotice::PasswordChanged:
+        title = "Your password was changed";
+        what = "was changed from a signed-in device on " + mail_utc_text(when) + ". All other devices were signed out.";
+        advice = "If this was not you, reset your password with Forgot password right away and contact your administrator – "
+                 "someone may know your password.";
+        break;
+    case SecurityNotice::TotpEnabled:
+        title = "Two-factor sign-in was set up";
+        what = "now uses an authenticator app for two-factor sign-in (set up on " + mail_utc_text(when) + ").";
+        advice = "If this was not you, contact your administrator right away: someone knows your password and set up "
+                 "their own authenticator. The administrator can reset two-factor sign-in.";
+        break;
+    case SecurityNotice::TotpLocked:
+    default:
+        title = "Too many wrong sign-in codes";
+        what = "received too many wrong two-factor codes together with the correct password (" + mail_utc_text(when) +
+               "). Two-factor sign-in is temporarily locked.";
+        advice = "If this was not you, someone knows your password: change it with Forgot password right away and "
+                 "contact your administrator.";
+        break;
+    }
+    MailContent m;
+    m.subject = "Solar Dashboard: " + title;
+    const std::string inner =
+        "<p style=\"margin:0 0 14px 0\">" + html_escape(hello) + "</p>"
+        "<p style=\"margin:0 0 14px 0\">Your account <b>" + html_escape(email) + "</b> on <b>" + html_escape(plant) + "</b> " +
+        html_escape(what) + "</p>"
+        "<p style=\"margin:0 0 14px 0\"><b>" + html_escape(advice) + "</b></p>";
+    m.html = frame("en", title, inner, "Sent by Solar Dashboard &middot; registration@solardashboard.bid");
+    m.text = hello + "\n\nYour account " + email + " on " + plant + " " + what + "\n\n" + advice + "\n";
     return m;
 }
 
@@ -279,11 +321,15 @@ std::string send_activation_mail(const Settings& s, const std::string& email, co
 }
 
 void send_password_changed_mail(const Settings& s, const std::string& email, const std::string& first_name) {
+    send_security_notice(s, email, first_name, SecurityNotice::PasswordReset);
+}
+
+void send_security_notice(const Settings& s, const std::string& email, const std::string& first_name, SecurityNotice kind) {
     std::string key = resend_key(s);
     if (key.empty()) throw MailError(tr("Slanje e-pošte nije podešeno (Postavke → Obavijesti → API ključ servisa Resend)."));
     NetInit net;
     try {
-        resend_send(s, key, kMailFromRegistration, {email}, password_changed_mail(first_name, email, s.plant_name, now()), false);
+        resend_send(s, key, kMailFromRegistration, {email}, security_notice_mail(kind, first_name, email, s.plant_name, now()), false);
     } catch (...) {
         wipe(key);
         throw;

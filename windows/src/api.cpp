@@ -143,7 +143,10 @@ std::string api_image_url(const std::string& kind) {
     return "/api/v1/images/" + kind + (q == std::string::npos ? "" : app_url.substr(q));
 }
 
-HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& ip, std::time_t t) {
+void notify_owner(const Settings& s, const std::string& email, const std::string& first_name, SecurityNotice kind);
+
+HttpResponse login(const ApiContext& ctx, const HttpRequest& req, const std::string& ip, std::time_t t) {
+    UserStore& users = *ctx.users;
     if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
     if (!users.has_admin()) return HttpResponse::json_body(503, {{"error", "not_set_up"}});
     const auto body = body_json(req);
@@ -164,6 +167,8 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
         log_info("API: prijava korisnika #" + std::to_string(r.user->id) + " s adrese " + ip);
         json ok = {{"token", r.token}, {"user", user_json(*r.user)}};
         if (!r.recovery_codes.empty()) ok["recovery_codes"] = r.recovery_codes;  // samo jednom, pri postavljanju
+        // 5.0.2 (audit C-10): vlasnik doznaje da je dvofaktorska prijava postavljena (i kad to nije bio on)
+        if (r.totp_enrolled) notify_owner(ctx.settings(), r.user->email, r.user->first_name, SecurityNotice::TotpEnabled);
         return HttpResponse::json_body(200, ok);
     }
     case LoginResult::Status::ActivationRequired:
@@ -176,6 +181,8 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
         return totp_reply("totp_invalid");
     case LoginResult::Status::Locked:
         count_failure(ip, t);
+        // 5.0.2 (audit C-12): drugi korak upravo zaključan – lozinka je poznata napadaču, vlasnik dobiva poruku
+        if (r.totp_locked) notify_owner(ctx.settings(), trim(str(*body, "email")), "", SecurityNotice::TotpLocked);
         return HttpResponse::json_body(423, {{"error", "locked"}, {"message", tr("Račun je privremeno zaključan zbog previše pogrešnih pokušaja.")}});  // bez vremena (SMA-26)
     case LoginResult::Status::Disabled:
         return HttpResponse::json_body(403, {{"error", "disabled"}, {"message", tr("Račun je blokiran.")}});
@@ -218,16 +225,20 @@ HttpResponse forgot_password(const ApiContext& ctx, const HttpRequest& req, cons
                                          {"message", tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.")}});
 }
 
-// 5.0.1 (audit C-09): vlasnik računa dobiva potvrdu da je lozinka promijenjena (bez koda) – u zasebnoj niti
-void notify_password_changed(const Settings& s, const std::string& email, const std::string& first_name) {
+// 5.0.1 (audit C-09) / 5.0.2 (C-10, C-12, C-13): vlasnik računa dobiva sigurnosnu obavijest – u zasebnoj niti
+void notify_owner(const Settings& s, const std::string& email, const std::string& first_name, SecurityNotice kind) {
     if (email.empty() || resend_key(s).empty()) return;
-    std::thread([s, email, first_name] {
+    std::thread([s, email, first_name, kind] {
         try {
-            send_password_changed_mail(s, email, first_name);
+            send_security_notice(s, email, first_name, kind);
         } catch (const std::exception& e) {
-            log_warn(std::string("Potvrda promjene lozinke nije poslana: ") + e.what());
+            log_warn(std::string("Sigurnosna obavijest vlasniku računa nije poslana: ") + e.what());
         }
     }).detach();
+}
+
+void notify_password_changed(const Settings& s, const std::string& email, const std::string& first_name) {
+    notify_owner(s, email, first_name, SecurityNotice::PasswordReset);
 }
 
 HttpResponse reset_password(const ApiContext& ctx, const HttpRequest& req, const std::string& ip, std::time_t t) {
@@ -249,7 +260,8 @@ HttpResponse reset_password(const ApiContext& ctx, const HttpRequest& req, const
     return HttpResponse::json_body(400, {{"error", "bad_code"}, {"message", tr("Kod nije točan ili je istekao – zatražite novi.")}});
 }
 
-HttpResponse change_password(UserStore& users, const UserInfo& me, const HttpRequest& req, const std::string& ip, std::time_t t) {
+HttpResponse change_password(const ApiContext& ctx, const UserInfo& me, const HttpRequest& req, const std::string& ip, std::time_t t) {
+    UserStore& users = *ctx.users;
     if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
     const auto body = body_json(req);
     if (!body) return HttpResponse::json_body(400, {{"error", "bad_request"}});
@@ -260,6 +272,8 @@ HttpResponse change_password(UserStore& users, const UserInfo& me, const HttpReq
         if (e.fields.count("old_password")) count_failure(ip, t);
         return HttpResponse::json_body(400, {{"error", "invalid"}, {"fields", e.fields}});
     }
+    log_info("API: korisnik #" + std::to_string(me.id) + " je promijenio lozinku (adresa " + ip + ")");
+    notify_owner(ctx.settings(), me.email, me.first_name, SecurityNotice::PasswordChanged);  // 5.0.2 (audit C-13)
     // sve prijave su poništene – ovaj uređaj dobiva novu oznaku
     const LoginResult r = users.login(me.email, new_pw, str(*body, "device").substr(0, kMaxDeviceLength), t, str(*body, "totp"), {},
                                       "net:" + ip);
@@ -281,7 +295,7 @@ HttpServer::Handler api_handler(ApiContext ctx) {
                 return HttpResponse::json_body(200, {{"app", "Solarni poslužitelj"}, {"api", kApiVersion}, {"setup", ctx.users->has_admin()}});
             }
             if (blocked(ip, t)) return HttpResponse::json_body(429, {{"error", "too_many_attempts"}});
-            if (req.path == "/api/v1/login") return login(*ctx.users, req, ip, t);
+            if (req.path == "/api/v1/login") return login(ctx, req, ip, t);
             if (req.path == "/api/v1/forgot_password") return forgot_password(ctx, req, ip, t);
             if (req.path == "/api/v1/reset_password") return reset_password(ctx, req, ip, t);
 
@@ -296,7 +310,7 @@ HttpServer::Handler api_handler(ApiContext ctx) {
                 return HttpResponse::json_body(200, {{"ok", true}});
             }
             if (req.path == "/api/v1/me") return HttpResponse::json_body(200, user_json(*me));
-            if (req.path == "/api/v1/password") return change_password(*ctx.users, *me, req, ip, t);
+            if (req.path == "/api/v1/password") return change_password(ctx, *me, req, ip, t);
             if (req.method != "GET" && req.method != "HEAD") return HttpResponse::json_body(405, {{"error", "method"}});
 
             const Settings s = ctx.settings();

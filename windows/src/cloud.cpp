@@ -176,8 +176,10 @@ HttpResult http_call(const std::string& base_url, const HttpCall& call) {
     if (pin.mismatch) {
         req.h = nullptr;  // zatvorio ju je povratni poziv
         log_warn("Solarni poslužitelj: otisak certifikata " + pin.seen + " ne odgovara zapamćenom " + call.pin);
-        throw CloudError(tr("Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste "
-                            "ponovno instalirali poslužitelj, prijavite se ponovno; inače netko u mreži možda presreće promet."));
+        // 5.0.2 (audit A-06): obrazac prijave tada traži novi kod za uparivanje (ponovno uparivanje)
+        throw CloudPairingNeeded(tr("Certifikat poslužitelja se promijenio – veza je prekinuta prije slanja podataka. Ako ste "
+                                    "ponovno instalirali poslužitelj, upišite novi kod za uparivanje s prozora poslužitelja; "
+                                    "inače netko u mreži možda presreće promet."));
     }
     if (!sent) fail_connect(base_url, GetLastError());
     HttpResult out;
@@ -211,16 +213,19 @@ json parse_server_json(const HttpResult& r) {
 namespace {
 // /ping (verzija, administrator, otisak) i SMA-04 uparivanje; vraća otisak za sljedeće pozive ("" = javni certifikat)
 std::string confirmed_pin(const std::string& base_url, const std::string& known_pin, const std::string& entered_code) {
+    // 5.0.2 (audit A-06 za Windows klijent): upisani kod pokreće ponovno uparivanje i kad je otisak od prije poznat
+    // (npr. ponovno instaliran poslužitelj) – novi otisak vrijedi samo ako mu kod odgovara
+    const bool repair = !trim(entered_code).empty();
     HttpCall ping;
     ping.path = "/api/v1/ping";
-    ping.pin = known_pin;
+    ping.pin = repair ? std::string{} : known_pin;
     const HttpResult p = http_call(base_url, ping);
     const json info = p.status == 200 ? parse_server_json(p) : json::object();
     if (info.value("api", 0) < 4) {
         throw CloudError(p.status == 200 ? tr("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.")
                                          : tr("Poslužitelj je vratio grešku {code}.", {{"code", std::to_string(p.status)}}));
     }
-    if (pinned_host(base_url) && known_pin.empty() && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
+    if (pinned_host(base_url) && (repair || known_pin.empty()) && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
         throw CloudPairingNeeded(entered_code.empty()
             ? tr("Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj).")
             : tr("Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze)."));
@@ -278,9 +283,10 @@ std::string cloud_reset_password(const std::string& base_url, const std::string&
 
 CloudLogin cloud_login(const std::string& base_url, const std::string& email, std::string password, const std::string& known_pin,
                        const std::string& totp, std::string new_password, const std::string& entered_code) {
+    const bool repair = !trim(entered_code).empty();  // 5.0.2 (audit A-06): ponovno uparivanje upisanim kodom
     HttpCall ping;
     ping.path = "/api/v1/ping";
-    ping.pin = known_pin;  // ista adresa kao prije: certifikat se ne smije promijeniti
+    ping.pin = repair ? std::string{} : known_pin;  // ista adresa kao prije: certifikat se ne smije promijeniti (osim uz kod)
     const HttpResult p = http_call(base_url, ping);
     const json info = p.status == 200 ? parse_server_json(p) : json::object();
     if (info.value("api", 0) < 4) {
@@ -291,7 +297,7 @@ CloudLogin cloud_login(const std::string& base_url, const std::string& email, st
 
     // SMA-04: prvi kontakt s poslužiteljem u lokalnoj mreži – otisak se potvrđuje kodom s prozora poslužitelja
     // (TOFU ne postoji); bez točnog koda lozinka se ne šalje
-    if (pinned_host(base_url) && known_pin.empty() && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
+    if (pinned_host(base_url) && (repair || known_pin.empty()) && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
         wipe(password);
         wipe(new_password);
         throw CloudPairingNeeded(entered_code.empty()

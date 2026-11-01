@@ -325,6 +325,20 @@ TEST_CASE("SMA-02 broker: PIN obavezan, zaključavanje nakon 5 pogrešnih, valid
     CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, caller)["ok"] == true);
 }
 
+TEST_CASE("5.0.2 (audit C-14): zaključavanje PIN-a brokera ostaje i nakon ponovnog pokretanja") {
+    TmpHome home;
+    save_secret_field("settings_pin_hash", hash_pin("1357"));
+    const std::wstring c = L"S-1-5-21-test";
+    {
+        BrokerCore broker([] { return std::vector<std::string>{}; });
+        for (int i = 0; i < kBrokerMaxPinFailures; ++i) broker.handle({{"op", "check_pin"}, {"pin", "0000"}}, c);
+        CHECK(broker.handle({{"op", "check_pin"}, {"pin", "1357"}}, c)["error"] == "locked");
+    }
+    BrokerCore restarted([] { return std::vector<std::string>{}; });  // novi proces (ponovno pokretanje računala)
+    CHECK(restarted.handle({{"op", "check_pin"}, {"pin", "1357"}}, c)["error"] == "locked");
+    CHECK(restarted.handle({{"op", "state"}}, c)["locked_s"].get<int64_t>() > 0);
+}
+
 TEST_CASE("SMA-02 broker: prijava na poslužitelj i uvoz – validacija polja i redaka") {
     TmpHome home;
     BrokerCore broker([] { return std::vector<std::string>{}; });
@@ -336,6 +350,13 @@ TEST_CASE("SMA-02 broker: prijava na poslužitelj i uvoz – validacija polja i 
     REQUIRE(r["ok"] == true);
     CHECK(unprotect_secret(load_settings().cloud_token_enc) == std::string(43, 'A'));
     CHECK(unprotect_secret(r["secrets"]["cloud_token_enc"]) == std::string(43, 'A'));
+    // 5.0.2 (audit W-08/W-12): drugi lokalni korisnik (bez PIN-a) ne dobiva oznaku prijave ni ključ pregleda
+    const json other = broker.handle({{"op", "state"}}, L"S-1-5-21-drugi");
+    CHECK(other["ok"] == true);
+    CHECK(other["secrets_owner"] == false);
+    CHECK(other["secrets"]["cloud_token_enc"] == "");
+    CHECK(other["secrets"]["remote_view_key_enc"] == "");
+    CHECK(broker.handle({{"op", "state"}}, c)["secrets_owner"] == true);
     json bad = login;
     bad["token"] = "ima razmak";
     CHECK(broker.handle(bad, c)["error"] == "bad_request");
@@ -711,10 +732,14 @@ TEST_CASE("R-14a: raspodijeljeni napad usporava udaljene prijave, upozorava jedn
     }
     CHECK(alerts.size() == 1);  // jedno upozorenje po razdoblju od 24 h
     CHECK(users.get(id)->locked_until == 0);  // račun nije zaključan
-    // nova adresa: prvi pokušaj smije (ispravna lozinka prolazi), drugi unutar minute ne
-    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:192.0.2.1").status == St::Ok);
-    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 10, {}, {}, "net:192.0.2.1").status == St::Locked);
-    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 10 + kThrottleSeconds, {}, {}, "net:192.0.2.1").status == St::Ok);
+    // 5.0.2 (audit C-12): ukupno, sa svih adresa zajedno, najviše jedan pokušaj u kAccountGlobalSeconds – nova adresa
+    // odmah nakon napada čeka (broj adresa više ne umnožava pokušaje)
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:192.0.2.2").status == St::Locked);
+    // nova adresa nakon ukupnog razmaka: prvi pokušaj smije (ispravna lozinka prolazi), drugi unutar minute ne
+    const std::time_t t1 = t + kAccountGlobalSeconds;
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t1, {}, {}, "net:192.0.2.1").status == St::Ok);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t1 + 10, {}, {}, "net:192.0.2.1").status == St::Locked);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t1 + 10 + kThrottleSeconds, {}, {}, "net:192.0.2.1").status == St::Ok);
     // lokalni prozor poslužitelja nije usporen
     CHECK(users.login("admin@primjer.hr", kPw, "x", t + 11).status == St::Ok);
     CHECK(users.login("admin@primjer.hr", kPw, "x", t + 12).status == St::Ok);

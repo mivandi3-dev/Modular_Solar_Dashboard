@@ -52,7 +52,7 @@ Since 3.0 there is no API key: the apps sign in with the **email and password** 
 - 5 wrong passwords lock the account for 15 minutes; 10 failed attempts from one address block it for 10 minutes (`429`).
 - **Activation code (4.0):** a user added without a password gets a one-time random activation code (12 characters, valid
   for 72 hours, shown to the administrator once) and sets their own password with it. There is no shared initial password.
-- **Pairing (4.0):** the first sign-in to a server on the local network requires the 12-character pairing code shown in the
+- **Pairing (4.0):** the first sign-in to a server on the local network requires the 20-character pairing code (100 bits, 5.0.2) shown in the
   server window (derived from the certificate's SHA-256 fingerprint) – no trust on first use.
 - **Two-factor sign-in (3.1):** the administrator enables it per account (administrators and users). At the next sign-in
   the user scans a QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy…; TOTP,
@@ -139,7 +139,7 @@ Od 3.0 nema API ključa: aplikacije se prijavljuju **e-poštom i lozinkom** kori
 - 5 pogrešnih lozinki zaključava račun na 15 minuta; 10 neuspjelih pokušaja s iste adrese blokira je na 10 minuta (`429`).
 - **Aktivacijski kod (4.0):** korisnik dodan bez lozinke dobiva jednokratni slučajni kod (12 znakova, vrijedi 72 sata,
   administratoru se prikazuje jednom) i njime postavlja svoju lozinku. Zajednička početna lozinka ne postoji.
-- **Uparivanje (4.0):** prva prijava na poslužitelj u lokalnoj mreži traži kod za uparivanje od 12 znakova s prozora
+- **Uparivanje (4.0):** prva prijava na poslužitelj u lokalnoj mreži traži kod za uparivanje od 20 znakova (100 bita, 5.0.2) s prozora
   poslužitelja (izveden iz SHA-256 otiska certifikata) – bez povjerenja pri prvom kontaktu.
 - **Dvofaktorska prijava (3.1):** administrator je uključuje po računu (administratori i korisnici). Pri sljedećoj prijavi
   korisnik skenira QR kod aplikacijom autentifikatorom (Google Authenticator, Microsoft Authenticator, Authy…; TOTP,
