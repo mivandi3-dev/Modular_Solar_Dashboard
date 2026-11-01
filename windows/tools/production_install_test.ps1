@@ -104,6 +104,19 @@ $cd = Join-Path $env:ProgramData "SolarniMonitor2"
 Check "klijent: mapa postavki – Users bez prava upisa" (-not (Has-UsersWrite $cd))
 foreach ($sub in @("data", "service", "config.json")) { if (Test-Path (Join-Path $cd $sub)) { Check "klijent: $sub – Users bez prava upisa" (-not (Has-UsersWrite (Join-Path $cd $sub))) } }
 Check "klijent: ui\ – Users smiju mijenjati (raspored, slike)" (Has-UsersWrite (Join-Path $cd "ui"))
+# 5.0.1 (audit I-01, I-02): mapa programa bez prava upisa za korisnike (SYSTEM pokreće exe iz nje); u mapama podataka nema veza
+foreach ($svcExe in @((Get-ScheduledTask -TaskName "Solarni monitor 2 - poller" -ErrorAction SilentlyContinue).Actions.Execute,
+                      (Get-ScheduledTask -TaskName "SolarniPosluzitelj" -ErrorAction SilentlyContinue).Actions.Execute)) {
+    if (-not $svcExe) { continue }
+    $appDir = Split-Path ($svcExe.Trim('"'))
+    $writable = @(@(Get-Item -LiteralPath $appDir) + @(Get-ChildItem -LiteralPath $appDir -Recurse -Force) | Where-Object { Has-UsersWrite $_.FullName })
+    Check "mapa programa $appDir – Users bez prava upisa (ni na jednoj datoteci)" ($writable.Count -eq 0) (($writable | Select-Object -First 3 | ForEach-Object FullName) -join ", ")
+}
+foreach ($dd in @($cd, (Join-Path $env:ProgramData "SolarniServer"))) {
+    if (-not (Test-Path $dd)) { continue }
+    $links = @(Get-ChildItem -LiteralPath $dd -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue)
+    Check "u $dd nema veza (junction/symlink)" ($links.Count -eq 0) (($links | ForEach-Object FullName) -join ", ")
+}
 $secrets = Join-Path $cd "secrets"
 Check "klijent: secrets\ postoji (PIN iz instalacije)" (Test-Path (Join-Path $secrets "secrets.json"))
 Check "klijent: secrets\ – Users nemaju nikakav pristup" (-not ((Get-Acl $secrets).Access | Where-Object { $_.IdentityReference -match "Users|Korisnici|Everyone|Svi" }))

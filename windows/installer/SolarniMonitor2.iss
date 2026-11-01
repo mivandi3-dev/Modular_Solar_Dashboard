@@ -305,6 +305,9 @@ Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"
   Check: not WebView2Installed; Flags: waituntilterminated
 #ifndef Server
 #ifndef TestInstall
+; 5.0.1 (audit I-01): ACL i karantena podmetnutog secrets\ PRIJE PIN-a (PIN se ne upisuje u tuđu datoteku)
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode client"; \
+  Flags: runhidden waituntilterminated
 ; PIN postavki (obavezan; broker ga traži za svaku izmjenu) – upisan na stranici instalacije, datoteka se odmah briše;
 ; prije acl_setup.ps1, da ACL mape (i secrets\) uvijek postavi skripta, a ne proces koji je stvorio mapu
 Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Flags: runhidden waituntilterminated; Check: PinEntered
@@ -315,10 +318,10 @@ Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Fl
 ; uklonjene (i korisnika koji je mapu stvorio prije instalacije ili iz 3.x); poslužitelj: samo SYSTEM i Administratori;
 ; klijent: Users samo čitanje, ui\ Users izmjena, secrets\ bez Users (zatvoren u svakom trenutku)
 #ifdef Server
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode server"; \
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode server -AppDir ""{app}"""; \
   Flags: runhidden waituntilterminated
 #else
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode client"; \
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode client -AppDir ""{app}"""; \
   Flags: runhidden waituntilterminated
 #endif
 #endif
@@ -402,8 +405,20 @@ var
   PinPage: TInputQueryWizardPage;
 
 function PinAlreadySet: Boolean;
+var
+  F: String;
+  Code: Integer;
 begin
-  Result := FileExists(ExpandConstant('{#DataDir}\secrets\secrets.json'));
+  { 5.0.1 (audit I-01): postojeći PIN vrijedi samo ako je secrets.json stvorila instalacija ili zadatak sustava
+    (vlasnik Administratori ili SYSTEM) – datoteka koju je korisnik podmetnuo prije instalacije ne zamjenjuje PIN }
+  Result := False;
+  F := ExpandConstant('{#DataDir}\secrets\secrets.json');
+  if not FileExists(F) then Exit;
+  if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+          '-NoProfile -NonInteractive -Command "$o = (Get-Acl -LiteralPath ''' + F + ''').GetOwner([Security.Principal.SecurityIdentifier]).Value; ' +
+          'if ($o -eq ''S-1-5-32-544'' -or $o -eq ''S-1-5-18'') { exit 0 } else { exit 3 }"',
+          '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Result := (Code = 0);
 end;
 
 procedure InitializeWizard;
