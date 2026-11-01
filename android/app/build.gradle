@@ -20,6 +20,8 @@ android {
         targetSdk 36
         versionCode 400
         versionName "4.0.0"
+        // 4.0 AT-04: instrumentirani testovi na uređaju/emulatoru (gradlew connectedDebugAndroidTest)
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -54,6 +56,9 @@ dependencies {
     // samo za jedinične testove na računalu (JVM) – ne ulaze u APK
     testImplementation "junit:junit:4.13.2"
     testImplementation "org.json:json:20240303"
+    // samo za instrumentirane testove (androidTest) – ne ulaze u APK
+    androidTestImplementation "androidx.test:runner:1.6.2"
+    androidTestImplementation "androidx.test.ext:junit:1.2.1"
 }
 
 def copyWeb = tasks.register("copyWeb", Sync) {
