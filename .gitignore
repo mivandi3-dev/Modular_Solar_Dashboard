@@ -41,3 +41,7 @@ __pycache__/
 *.p12
 *.pem
 *.key
+
+# rezultati e2e testova (snimke zaslona)
+windows/tests/e2e/shots/
+windows/tests/e2e/home_server_test/

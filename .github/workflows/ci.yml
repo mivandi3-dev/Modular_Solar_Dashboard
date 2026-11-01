@@ -1,0 +1,92 @@
+# Solarni monitor – automatske provjere na svakom pushu i pull requestu (bez tajni, bez potpisivanja, bez objave).
+# Izdanja (installeri, APK) i dalje se grade lokalno (windows/build.ps1) – ovdje samo gradnja i testovi.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-cpp:
+    name: Windows C++ (llvm-mingw, doctest)
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: llvm-mingw
+        shell: pwsh
+        run: |
+          $v = "20261020"
+          $name = "llvm-mingw-$v-ucrt-x86_64"
+          Invoke-WebRequest "https://github.com/mstorsjo/llvm-mingw/releases/download/$v/$name.zip" -OutFile llvm.zip
+          Expand-Archive llvm.zip -DestinationPath C:\llvm
+          "C:\llvm\$name\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Ninja
+        run: choco install ninja -y --no-progress
+      - name: Vanjske biblioteke (SHA-256 provjera u fetch.ps1)
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File windows\third_party\fetch.ps1
+      - name: Gradnja testova
+        shell: pwsh
+        run: |
+          cmake -S windows -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_RC_COMPILER=windres
+          cmake --build build-ci --target solari_tests
+      - name: Testovi
+        shell: pwsh
+        run: .\build-ci\solari_tests.exe
+
+  gateway:
+    name: Rust gateway (clippy, testovi, cargo-deny)
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Testovi
+        run: cargo test --locked
+      - name: Ranjive ovisnosti (cargo-deny, advisories)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: gateway/Cargo.toml
+          command: check advisories
+
+  web-js:
+    name: Web sučelje (JS testovi)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: node --test
+        run: node --test windows/tests/js/
+
+  android:
+    name: Android (JVM testovi)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Gradle (wrapper sa SHA-256 provjerom)
+        run: chmod +x gradlew && ./gradlew testDebugUnitTest --console=plain
