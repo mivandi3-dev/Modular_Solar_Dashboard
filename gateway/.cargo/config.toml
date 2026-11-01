@@ -1,0 +1,4 @@
+# 4.0 (SMA-22, isto kao C++): Control Flow Guard za kod gatewaya i ovisnosti (standardna biblioteka Rusta nije
+# prevedena s CFG-om – za to bi trebao nestabilni -Zbuild-std); ASLR/High-entropy/NX su zadani.
+[target.x86_64-pc-windows-gnullvm]
+rustflags = ["-Ccontrol-flow-guard=checks", "-Clink-arg=-Wl,--guard-cf"]
