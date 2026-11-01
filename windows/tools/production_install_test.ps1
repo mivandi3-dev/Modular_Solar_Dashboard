@@ -104,6 +104,13 @@ $cd = Join-Path $env:ProgramData "SolarniMonitor2"
 Check "klijent: mapa postavki – Users bez prava upisa" (-not (Has-UsersWrite $cd))
 foreach ($sub in @("data", "service", "config.json")) { if (Test-Path (Join-Path $cd $sub)) { Check "klijent: $sub – Users bez prava upisa" (-not (Has-UsersWrite (Join-Path $cd $sub))) } }
 Check "klijent: ui\ – Users smiju mijenjati (raspored, slike)" (Has-UsersWrite (Join-Path $cd "ui"))
+# 5.0.2 (audit W-05): na samoj mapi ui\ korisnici nemaju DELETE ni WRITE_DAC (ne mogu je zamijeniti vezom)
+$uiDel = (Get-Acl (Join-Path $cd "ui")).Access | Where-Object {
+    $sid = try { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } catch { "" }
+    $sid -in @("S-1-5-32-545", "S-1-5-11", "S-1-1-0") -and $_.AccessControlType -eq "Allow" -and
+    -not ($_.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
+    (([int64]$_.FileSystemRights) -band (0x10000 -bor 0x40000 -bor 0x80000)) }
+Check "klijent: ui\ – Users ne mogu obrisati ni preuzeti mapu" (-not $uiDel)
 # 5.0.1 (audit I-01, I-02): mapa programa bez prava upisa za korisnike (SYSTEM pokreće exe iz nje); u mapama podataka nema veza
 foreach ($svcExe in @((Get-ScheduledTask -TaskName "Solarni monitor 2 - poller" -ErrorAction SilentlyContinue).Actions.Execute,
                       (Get-ScheduledTask -TaskName "SolarniPosluzitelj" -ErrorAction SilentlyContinue).Actions.Execute)) {
@@ -172,6 +179,8 @@ if ($Uninstall) {
     Check "zadaci uklonjeni" (-not (Get-ScheduledTask -TaskName "Solarni*" -ErrorAction SilentlyContinue))
     Check "pravila vatrozida uklonjena" (-not (Get-NetFirewallRule -DisplayName "Solarni*" -ErrorAction SilentlyContinue))
     Check "podaci ostaju (tiha deinstalacija ne briše %ProgramData%)" ((Test-Path $cd) -and (Test-Path $sd))
+    # 5.0.2 (audit I-11): tajne (oznake prijave, ključevi, PIN) ne ostaju nakon deinstalacije
+    Check "tajne obrisane pri deinstalaciji (klijent)" (-not (Test-Path (Join-Path $cd "secrets")))
 }
 
 $lines.Add("")
