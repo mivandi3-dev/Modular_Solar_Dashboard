@@ -356,11 +356,13 @@ int run_poller_mode() {
         log_error("Broker postavki se ne pokreće: " + problem + " (popravite instalacijom)");
     } else {
         try {
-            broker = std::make_unique<BrokerServer>([] {
-                std::vector<std::string> names;
-                for (const auto& i : list_interfaces()) names.push_back(i.name);
-                return names;
-            });
+            broker = std::make_unique<BrokerServer>(
+                [] {
+                    std::vector<std::string> names;
+                    for (const auto& i : list_interfaces()) names.push_back(i.name);
+                    return names;
+                },
+                broker_pipe_name(), broker_sddl());
             broker->start();
             log_info("Broker postavki pokrenut");
         } catch (const std::exception& e) {

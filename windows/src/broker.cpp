@@ -281,6 +281,28 @@ BrokerServer::BrokerServer(BrokerCore::Interfaces interfaces, std::wstring name,
 void BrokerServer::start() { server_.start(); }
 void BrokerServer::stop() { server_.stop(); }
 
+namespace {
+std::wstring dev_broker_pipe() {
+#ifdef SOLARI_DEV_BUILD
+    if (const wchar_t* p = _wgetenv(L"SOLARI_DEV_BROKER_PIPE"); p && *p) return p;
+#endif
+    return {};
+}
+}  // namespace
+
+std::wstring broker_pipe_name() {
+    const std::wstring dev = dev_broker_pipe();
+    return dev.empty() ? std::wstring(kBrokerPipe) : dev;
+}
+
+std::wstring broker_owner_sid() { return dev_broker_pipe().empty() ? std::wstring(ipc::kSystemSid) : ipc::current_user_sid(); }
+
+std::wstring broker_sddl() {
+    return dev_broker_pipe().empty() ? std::wstring(kBrokerSddl) : std::wstring(L"D:P(A;;GA;;;SY)(A;;GA;;;OW)(A;;0x12018b;;;IU)");
+}
+
+json broker_call(const json& request) { return broker_call(request, broker_pipe_name(), broker_owner_sid()); }
+
 json broker_call(const json& request, const std::wstring& name, const std::wstring& owner_sid) {
     return ipc::pipe_call(name, request, owner_sid, 15'000);
 }

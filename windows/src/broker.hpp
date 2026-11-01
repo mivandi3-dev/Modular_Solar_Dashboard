@@ -67,7 +67,14 @@ private:
 };
 
 // Sučelje: jedan poziv brokera (provjerava da je vlasnik kanala SYSTEM). Baca ipc::PipeError.
-json broker_call(const json& request, const std::wstring& name = kBrokerPipe, const std::wstring& owner_sid = ipc::kSystemSid);
+json broker_call(const json& request);  // produkcijski kanal, vlasnik SYSTEM
+json broker_call(const json& request, const std::wstring& name, const std::wstring& owner_sid = ipc::kSystemSid);
+
+// Kanal brokera: u produkciji kBrokerPipe, vlasnik SYSTEM, kBrokerSddl. Samo razvojna gradnja (SOLARI_DEV_BUILD):
+// SOLARI_DEV_BROKER_PIPE (ime) – tada je vlasnik trenutni korisnik i DACL bez O:SY (testovi bez administratora).
+std::wstring broker_pipe_name();
+std::wstring broker_owner_sid();
+std::wstring broker_sddl();
 
 // Prije pokretanja brokera: mapa postavki ne smije davati Users pravo upisa ni biti spojnica (fail-closed).
 // Vraća opis problema ili "" ako je sve u redu.

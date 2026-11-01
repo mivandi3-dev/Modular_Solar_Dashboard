@@ -40,6 +40,9 @@ int App::run() {
         fs::create_directories(ui_dir(), ec);
         // produkcija: instalacija daje Users samo čitanje mape (SMA-02) – izmjene idu kroz broker zadatka sustava
         broker_mode_ = !server_role_ && !dir_writable(home_dir());
+#ifdef SOLARI_DEV_BUILD
+        if (const wchar_t* f = _wgetenv(L"SOLARI_DEV_FORCE_BROKER"); f && *f == L'1') broker_mode_ = !server_role_;  // e2e bez administratora
+#endif
         migrate_ui_files();
     }
     log_open(logs_dir() / L"app.log");

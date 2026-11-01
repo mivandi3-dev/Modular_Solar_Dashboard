@@ -24,6 +24,14 @@ App& app() {
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmdline, int) {
     using namespace sm;
+#ifdef SOLARI_DEV_BUILD
+    // samo razvojna gradnja: zaseban mutex pollera za e2e (instalirani zadatak sustava drži Global\SolarniMonitor2Poller)
+    static std::wstring dev_mutex;
+    if (const wchar_t* m = _wgetenv(L"SOLARI_DEV_POLLER_MUTEX"); m && *m) {
+        dev_mutex = m;
+        set_poller_mutex(dev_mutex.c_str());
+    }
+#endif
     if (std::wstring(cmdline).find(L"--poller") != std::wstring::npos) return run_poller_mode();
     // 4.0 (SMA-02): instalacija (administrator) postavlja PIN postavki: --set-pin-file "<datoteka>" (datoteka se briše)
     if (std::wstring(cmdline).find(L"--set-pin-file") != std::wstring::npos) {
