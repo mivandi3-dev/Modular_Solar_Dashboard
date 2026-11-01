@@ -33,6 +33,8 @@ pub fn route(path: &str) -> Option<(&'static str, Option<&'static str>)> {
         "/api/v1/logout" => ("logout", None),
         "/api/v1/me" => ("me", None),
         "/api/v1/password" => ("password", None),
+        "/api/v1/forgot_password" => ("forgot_password", None),
+        "/api/v1/reset_password" => ("reset_password", None),
         "/api/v1/info" => ("info", None),
         "/api/v1/dashboard" => ("dashboard", None),
         "/api/v1/report" => ("report", None),
@@ -231,6 +233,16 @@ mod tests {
         assert_eq!(sent["token"], "abc_DEF-1");
         assert_eq!(sent["client_ip"], "192.168.1.5");
         assert!(sent.get("cf_ip").is_none());
+    }
+
+    #[test]
+    fn forgotten_password_routes() {
+        assert_eq!(route("/api/v1/forgot_password"), Some(("forgot_password", None)));
+        assert_eq!(route("/api/v1/reset_password"), Some(("reset_password", None)));
+        assert_eq!(route("/api/v1/forgot_password/"), None);
+        assert_eq!(route("/api/v1/password/reset"), None);
+        // naziv rute stane u ograničenje servisa (api_ipc.cpp: najviše 16 znakova)
+        assert!(["forgot_password", "reset_password"].iter().all(|r| r.len() <= 16));
     }
 
     #[tokio::test]

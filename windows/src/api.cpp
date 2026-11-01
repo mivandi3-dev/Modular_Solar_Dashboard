@@ -4,11 +4,14 @@
 #include <iterator>
 #include <map>
 #include <mutex>
+#include <thread>
 #include <vector>
 
+#include "crypto.hpp"
 #include "dashboard.hpp"
 #include "i18n.hpp"
 #include "images.hpp"
+#include "mailer.hpp"
 #include "report.hpp"
 
 namespace sm {
@@ -185,6 +188,57 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
     return HttpResponse::json_body(401, {{"error", "bad_credentials"}, {"message", tr("Pogrešna e-pošta ili lozinka.")}});
 }
 
+// Zaboravljena lozinka: odgovor je uvijek isti (ne otkriva postoji li račun); kod ide e-poštom u zasebnoj niti.
+// Svaki zahtjev se broji u ograničenje po adresi (najviše 10 u 10 min), a račun dobiva novi kod najranije za 2 min.
+HttpResponse forgot_password(const ApiContext& ctx, const HttpRequest& req, const std::string& ip, std::time_t t) {
+    if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
+    const auto body = body_json(req);
+    if (!body) return HttpResponse::json_body(400, {{"error", "bad_request"}});
+    const Settings s = ctx.settings();
+    if (resend_key(s).empty()) {
+        return HttpResponse::json_body(503, {{"error", "mail_not_configured"},
+                                             {"message", tr("Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.")}});
+    }
+    count_failure(ip, t);
+    const std::string email = trim(str(*body, "email"));
+    if (valid_email(email)) {
+        ResetRequest r = ctx.users->request_password_reset(email, t);
+        if (r.send && ctx.send_reset) {
+            ctx.send_reset(s, r);
+        } else if (r.send) {
+            std::thread([s, r]() mutable {
+                try {
+                    send_password_reset_mail(s, r.email, r.first_name, r.code, r.valid_until);
+                    log_info("API: kod za zaboravljenu lozinku poslan e-poštom");
+                } catch (const std::exception& e) {
+                    log_error(std::string("Kod za zaboravljenu lozinku nije poslan: ") + e.what());
+                }
+                wipe(r.code);
+            }).detach();
+        }
+    }
+    return HttpResponse::json_body(200, {{"ok", true},
+                                         {"message", tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.")}});
+}
+
+HttpResponse reset_password(UserStore& users, const HttpRequest& req, const std::string& ip, std::time_t t) {
+    if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
+    const auto body = body_json(req);
+    if (!body) return HttpResponse::json_body(400, {{"error", "bad_request"}});
+    const ResetResult r = users.reset_password(trim(str(*body, "email")), str(*body, "code"), str(*body, "new_password"), t);
+    switch (r.status) {
+    case ResetResult::Status::Ok:
+        clear_failures(ip);
+        log_info("API: nova lozinka postavljena kodom iz e-pošte (adresa " + ip + ")");
+        return HttpResponse::json_body(200, {{"ok", true}, {"message", tr("Nova lozinka je postavljena – prijavite se.")}});
+    case ResetResult::Status::PasswordInvalid:
+        return HttpResponse::json_body(400, {{"error", "password_invalid"}, {"message", r.problem}});
+    case ResetResult::Status::BadCode: break;
+    }
+    count_failure(ip, t);
+    return HttpResponse::json_body(400, {{"error", "bad_code"}, {"message", tr("Kod nije točan ili je istekao – zatražite novi.")}});
+}
+
 HttpResponse change_password(UserStore& users, const UserInfo& me, const HttpRequest& req, const std::string& ip, std::time_t t) {
     if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
     const auto body = body_json(req);
@@ -218,6 +272,8 @@ HttpServer::Handler api_handler(ApiContext ctx) {
             }
             if (blocked(ip, t)) return HttpResponse::json_body(429, {{"error", "too_many_attempts"}});
             if (req.path == "/api/v1/login") return login(*ctx.users, req, ip, t);
+            if (req.path == "/api/v1/forgot_password") return forgot_password(ctx, req, ip, t);
+            if (req.path == "/api/v1/reset_password") return reset_password(*ctx.users, req, ip, t);
 
             const std::string token = bearer(req);
             const auto me = token.empty() ? std::nullopt : ctx.users->session_user(token, t);

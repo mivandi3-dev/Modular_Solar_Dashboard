@@ -492,6 +492,35 @@ const actions = {
     }
     return res;
   }),
+  // zaboravljena lozinka: kod e-poštom, zatim nova lozinka (prozor poslužitelja ili prijava klijenta na poslužitelj)
+  "forgot-send": (btn) => {
+    const box = btn.closest("[data-forgot]"), out = $(".fp-result", box);
+    if (box.dataset.forgot === "admin") {
+      return busy(btn, out, T("Šaljem…"), () => api.admin_forgot_password($("#login-email").value.trim()));
+    }
+    return busy(btn, out, T("Šaljem…"), async () => {
+      const res = await api.cloud_forgot_password(forgotForm());
+      if (res.pairing) $("#cloud_pairing").focus();
+      return res;
+    });
+  },
+  "forgot-reset": (btn) => {
+    const box = btn.closest("[data-forgot]"), out = $(".fp-result", box);
+    const code = $(".fp-code", box).value.trim(), np1 = $(".fp-np1", box).value, np2 = $(".fp-np2", box).value;
+    if (!code) { setResult(out, { ok: false, message: T("Upišite kod iz e-pošte.") }); return null; }
+    if (!np1 || np1 !== np2) { setResult(out, { ok: false, message: T("Nove lozinke se ne podudaraju.") }); return null; }
+    return busy(btn, out, T("Spremam (sigurno spremanje lozinke traje sekundu)…"), async () => {
+      const res = box.dataset.forgot === "admin"
+        ? await api.admin_reset_password($("#login-email").value.trim(), code, np1)
+        : await api.cloud_reset_password({ ...forgotForm(), code, new_password: np1 });
+      if (res.ok) {
+        $$(".fp-code, .fp-np1, .fp-np2", box).forEach((el) => { el.value = ""; });
+        box.open = false;
+        $(box.dataset.forgot === "admin" ? "#login-password" : "#cloud_password").focus();
+      }
+      return res;
+    });
+  },
   "cloud-logout": (btn) => busy(btn, $("#cloud-result"), T("Odjavljujem…"), async () => {
     const res = await api.cloud_logout();
     if (res.ok) { state.settings.cloud_account = null; renderCloudAccount(state.settings); }
@@ -727,6 +756,10 @@ async function start() {
   $("#app").hidden = false;
   show(state.wizard ? "welcome" : steps().includes(state.panel) ? state.panel : "network");
   if (state.panel === "display") $("#images-card").scrollIntoView({ block: "start" });
+}
+
+function forgotForm() {
+  return { cloud_url: $('[data-field="cloud_url"]').value, email: $("#cloud_email").value.trim(), pairing_code: $("#cloud_pairing").value.trim() };
 }
 
 // Solarni poslužitelj: prozor se otvara tek nakon prijave administratora (ili izrade prvoga)

@@ -69,6 +69,7 @@ public class ServerClientTest {
     private static final class FakeServer implements AutoCloseable {
         final java.net.ServerSocket server;
         final AtomicInteger logins = new AtomicInteger();
+        final AtomicInteger resets = new AtomicInteger();  // /forgot_password i /reset_password (e-pošta, kod)
         final AtomicInteger requests = new AtomicInteger();
         final int port;
         private final Thread thread;
@@ -103,7 +104,10 @@ public class ServerClientTest {
                         }
                         for (int i = 0; i < length; i++) in.read();
                         String body;
-                        if (line.contains("/api/v1/login")) {
+                        if (line.contains("/api/v1/forgot_password") || line.contains("/api/v1/reset_password")) {
+                            resets.incrementAndGet();
+                            body = "{\"ok\":true,\"message\":\"poslano\"}";
+                        } else if (line.contains("/api/v1/login")) {
                             logins.incrementAndGet();
                             body = "{\"token\":\"oznaka-prijave-0123456789-0123456789-01234\",\"user\":{\"first_name\":\"Ana\","
                                     + "\"last_name\":\"Horvat\",\"email\":\"ana@primjer.hr\",\"role\":\"user\"}}";
@@ -174,6 +178,34 @@ public class ServerClientTest {
                 }
             }
             assertEquals("lozinka nije smjela biti poslana", 0, s.logins.get());
+        }
+    }
+
+    @Test public void forgottenPasswordNeedsPairingLikeLogin() throws Exception {
+        try (FakeServer s = new FakeServer(keystoreA)) {
+            String base = "https://127.0.0.1:" + s.port;
+            try {
+                ServerClient.forgotPassword(base, "ana@primjer.hr", "", "");
+                fail("e-pošta poslana bez koda za uparivanje");
+            } catch (ServerClient.PairingNeeded expected) {
+                // očekivano
+            }
+            try {
+                ServerClient.resetPassword(base, "ana@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", "", "AAAA-BBBB-CCCC");
+                fail("kod poslan bez ispravnog koda za uparivanje");
+            } catch (ServerClient.PairingNeeded expected) {
+                // očekivano
+            }
+            assertEquals("e-pošta ni kod nisu smjeli biti poslani", 0, s.resets.get());
+            try {
+                ServerClient.forgotPassword(base, "nije-adresa", fingerprintA, "");
+                fail("neispravna e-pošta prihvaćena");
+            } catch (ServerClient.ServerException expected) {
+                // očekivano – bez zahtjeva prema poslužitelju
+            }
+            assertEquals("poslano", ServerClient.forgotPassword(base, "ana@primjer.hr", "", ServerClient.pairingCode(fingerprintA)));
+            assertEquals("poslano", ServerClient.resetPassword(base, "ana@primjer.hr", "ABCD-EFGH", "Novo-Sunce-2027!", fingerprintA, ""));
+            assertEquals(2, s.resets.get());
         }
     }
 

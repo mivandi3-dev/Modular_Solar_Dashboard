@@ -48,6 +48,17 @@
       <button type="button" class="btn primary" data-action="recovery-done">Spremio sam kodove – nastavi</button>
     </div>
     <p class="result" id="login-result" role="status"></p>
+    <details class="forgot" data-forgot="admin">
+      <summary>Zaboravljena lozinka?</summary>
+      <p class="small">Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom.
+        Dok ga ne iskoristite, vrijedi stara lozinka.</p>
+      <button type="button" class="btn" data-action="forgot-send">Pošalji kod e-poštom</button>
+      <label class="stack">Kod iz e-pošte<input class="fp-code" autocomplete="one-time-code" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX"></label>
+      <label class="stack">Nova lozinka<input class="fp-np1" type="password" autocomplete="new-password"></label>
+      <label class="stack">Ponovite novu lozinku<input class="fp-np2" type="password" autocomplete="new-password"></label>
+      <button type="button" class="btn primary" data-action="forgot-reset">Postavi novu lozinku</button>
+      <p class="result fp-result" role="status"></p>
+    </details>
     <div class="row-end">
       <button type="button" class="btn" data-action="close">Odustani</button>
       <button type="submit" class="btn primary" id="login-submit">Prijava</button>
@@ -153,6 +164,19 @@
           <button class="btn primary cloud-login" data-action="cloud-login">Prijava</button>
           <button class="btn ghost cloud-logout" data-action="cloud-logout">Odjava</button>
           <p class="result" id="cloud-result" role="status"></p>
+        </div>
+        <div class="cloud-fields cloud-login">
+    <details class="forgot" data-forgot="cloud">
+      <summary>Zaboravljena lozinka?</summary>
+      <p class="small">Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom.
+        Dok ga ne iskoristite, vrijedi stara lozinka.</p>
+      <button type="button" class="btn" data-action="forgot-send">Pošalji kod e-poštom</button>
+      <label class="stack">Kod iz e-pošte<input class="fp-code" autocomplete="one-time-code" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX"></label>
+      <label class="stack">Nova lozinka<input class="fp-np1" type="password" autocomplete="new-password"></label>
+      <label class="stack">Ponovite novu lozinku<input class="fp-np2" type="password" autocomplete="new-password"></label>
+      <button type="button" class="btn primary" data-action="forgot-reset">Postavi novu lozinku</button>
+      <p class="result fp-result" role="status"></p>
+    </details>
         </div>
       </fieldset>
       <p class="lead local-only">Računalo može imati dvije mreže: jednu prema SmartLoggeru (lokalna mreža elektrane) i drugu

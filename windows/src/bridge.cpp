@@ -178,6 +178,49 @@ json cloud_login_call(App& app, const json& form) {
     }
 }
 
+// Zaboravljena lozinka – klijent prema Solarnom poslužitelju (adresa i kod za uparivanje kao kod prijave)
+json cloud_password_call(App& app, const json& form, bool reset) {
+    const auto url = normalize_server_url(form.value("cloud_url", std::string{}));
+    if (!url) return fail(tr("Upišite adresu poslužitelja, npr. https://solar.tvrtka.hr"));
+    const Settings cur = app.settings();
+    const std::string pin = cur.cloud_url == *url ? cur.cloud_cert_pin : std::string{};
+    try {
+        if (!reset) return ok(cloud_forgot_password(*url, form.value("email", std::string{}), pin, form.value("pairing_code", std::string{})));
+        return ok(cloud_reset_password(*url, form.value("email", std::string{}), form.value("code", std::string{}),
+                                       form.value("new_password", std::string{}), pin, form.value("pairing_code", std::string{})));
+    } catch (const CloudPairingNeeded& e) {
+        return fail(e.what(), {{"pairing", true}});
+    } catch (const CloudPasswordChange& e) {
+        return fail(e.what(), {{"password_invalid", true}});
+    } catch (const std::exception& e) {
+        return fail(e.what());
+    }
+}
+
+// Zaboravljena lozinka – prozor Solarnog poslužitelja (lokalno, isti postupak i ista pravila kao preko mreže)
+json admin_forgot_password(App& app, const std::string& email) {
+    const Settings s = app.settings();
+    if (resend_key(s).empty()) return fail(tr("Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru."));
+    if (!valid_email(trim(email))) return fail(tr("Upišite e-poštu računa."));
+    ResetRequest r = app.users().request_password_reset(trim(email), now());
+    if (r.send) {
+        try {
+            send_password_reset_mail(s, r.email, r.first_name, r.code, r.valid_until);
+        } catch (const std::exception& e) {
+            log_error(std::string("Kod za zaboravljenu lozinku nije poslan: ") + e.what());
+        }
+        wipe(r.code);
+    }
+    return ok(tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta."));
+}
+
+json admin_reset_password(App& app, const std::string& email, const std::string& code, std::string new_password) {
+    const ResetResult r = app.users().reset_password(trim(email), code, std::move(new_password), now());
+    if (r.status == ResetResult::Status::Ok) return ok(tr("Nova lozinka je postavljena – prijavite se."));
+    if (r.status == ResetResult::Status::PasswordInvalid) return fail(r.problem, {{"password_invalid", true}});
+    return fail(tr("Kod nije točan ili je istekao – zatražite novi."));
+}
+
 json cloud_logout_call(App& app) {
     cloud_logout(app.settings());
     if (app.broker_mode()) {
@@ -711,7 +754,7 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     };
     const bool locked = kind == WindowKind::Settings && !app.settings_unlocked();
     const std::set<std::string> kPublic = {"get_state", "unlock", "close", "get_i18n", "admin_login", "setup_admin", "window_control",
-                                           "window_state"};
+                                           "window_state", "admin_forgot_password", "admin_reset_password"};
     if (locked && !kPublic.count(method)) throw std::runtime_error(tr("Postavke su zaključane PIN-om."));
     // Glavni prozor (dashboard) ne smije mijenjati postavke ni korisnike – samo prozor postavki (PIN / prijava administratora)
     if (kind == WindowKind::Main && settings_only_method(method)) throw std::runtime_error("Metoda nije dostupna u ovom prozoru: " + method);
@@ -755,6 +798,16 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
             return r;
         });
     }
+    if (method == "admin_forgot_password" && app.server_role()) {
+        return async([&app, email = arg_string(args, 0)] { return admin_forgot_password(app, email); });
+    }
+    if (method == "admin_reset_password" && app.server_role()) {
+        return async([&app, email = arg_string(args, 0), code = arg_string(args, 1), npw = arg_string(args, 2)]() mutable {
+            json r = admin_reset_password(app, email, code, std::move(npw));
+            wipe(npw);
+            return r;
+        });
+    }
     if (method == "setup_admin" && app.server_role()) {
         return async([&app, form = args.at(0)] { return app.setup_admin(user_input(form)); });
     }
@@ -786,6 +839,8 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     if (method == "test_email") return async([&app, form = args.at(0)] { return test_email(app, form); });
     if (method == "cloud_login") return async([&app, form = args.at(0)] { return cloud_login_call(app, form); });
     if (method == "cloud_logout") return async([&app] { return cloud_logout_call(app); });
+    if (method == "cloud_forgot_password") return async([&app, form = args.at(0)] { return cloud_password_call(app, form, false); });
+    if (method == "cloud_reset_password") return async([&app, form = args.at(0)] { return cloud_password_call(app, form, true); });
     if (app.server_role()) {  // korisnici poslužitelja (samo prijavljeni administrator – vidi provjeru gore)
         if (method == "users_list") return async([&app] { return users_list(app); });
         if (method == "user_save") return async([&app, form = args.at(0)] { return user_save(app, form); });

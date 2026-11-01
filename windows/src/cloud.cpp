@@ -10,6 +10,7 @@
 #include "dashboard.hpp"
 #include "images.hpp"
 #include "i18n.hpp"
+#include "users.hpp"
 #include "crypto.hpp"
 #include "secret.hpp"
 #include "tls.hpp"
@@ -206,6 +207,74 @@ json parse_server_json(const HttpResult& r) {
     }
 }
 }  // namespace
+
+namespace {
+// /ping (verzija, administrator, otisak) i SMA-04 uparivanje; vraća otisak za sljedeće pozive ("" = javni certifikat)
+std::string confirmed_pin(const std::string& base_url, const std::string& known_pin, const std::string& entered_code) {
+    HttpCall ping;
+    ping.path = "/api/v1/ping";
+    ping.pin = known_pin;
+    const HttpResult p = http_call(base_url, ping);
+    const json info = p.status == 200 ? parse_server_json(p) : json::object();
+    if (info.value("api", 0) < 4) {
+        throw CloudError(p.status == 200 ? tr("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.")
+                                         : tr("Poslužitelj je vratio grešku {code}.", {{"code", std::to_string(p.status)}}));
+    }
+    if (pinned_host(base_url) && known_pin.empty() && !pairing_code_matches(entered_code, p.cert_fingerprint)) {
+        throw CloudPairingNeeded(entered_code.empty()
+            ? tr("Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj).")
+            : tr("Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze)."));
+    }
+    return pinned_host(base_url) ? p.cert_fingerprint : "";
+}
+
+HttpResult post_json(const std::string& base_url, const std::string& path, const std::string& pin, std::string body) {
+    HttpCall call;
+    call.method = "POST";
+    call.path = path;
+    call.pin = pin;
+    call.body = std::move(body);
+    try {
+        HttpResult r = http_call(base_url, call);
+        wipe(call.body);
+        return r;
+    } catch (...) {
+        wipe(call.body);
+        throw;
+    }
+}
+}  // namespace
+
+std::string cloud_forgot_password(const std::string& base_url, const std::string& email, const std::string& known_pin,
+                                  const std::string& pairing_code) {
+    if (!valid_email(trim(email))) throw CloudError(tr("Upišite e-poštu računa."));
+    const std::string pin = confirmed_pin(base_url, known_pin, pairing_code);
+    const HttpResult r = post_json(base_url, "/api/v1/forgot_password", pin, json{{"email", trim(email)}}.dump());
+    const json j = parse_server_json(r);
+    if (r.status == 429) throw CloudError(tr("Previše pokušaja – pokušajte ponovno za nekoliko minuta."));
+    if (r.status != 200) throw CloudError(j.value("message", tr("Poslužitelj je vratio grešku {code}.", {{"code", std::to_string(r.status)}})));
+    return j.value("message", tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta."));
+}
+
+std::string cloud_reset_password(const std::string& base_url, const std::string& email, const std::string& code, std::string new_password,
+                                 const std::string& known_pin, const std::string& pairing_code) {
+    std::string pin;
+    try {
+        pin = confirmed_pin(base_url, known_pin, pairing_code);
+    } catch (...) {
+        wipe(new_password);
+        throw;
+    }
+    std::string body = json{{"email", trim(email)}, {"code", trim(code)}, {"new_password", new_password}}.dump();
+    wipe(new_password);
+    const HttpResult r = post_json(base_url, "/api/v1/reset_password", pin, std::move(body));
+    const json j = parse_server_json(r);
+    const std::string error = j.value("error", "");
+    if (r.status == 200) return j.value("message", tr("Nova lozinka je postavljena – prijavite se."));
+    if (error == "password_invalid") throw CloudPasswordChange(j.value("message", tr("Nova lozinka ne zadovoljava pravila.")));
+    if (r.status == 429) throw CloudError(tr("Previše pokušaja – pokušajte ponovno za nekoliko minuta."));
+    throw CloudError(j.value("message", tr("Kod nije točan ili je istekao – zatražite novi.")));
+}
 
 CloudLogin cloud_login(const std::string& base_url, const std::string& email, std::string password, const std::string& known_pin,
                        const std::string& totp, std::string new_password, const std::string& entered_code) {

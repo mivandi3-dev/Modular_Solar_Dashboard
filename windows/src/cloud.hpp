@@ -65,6 +65,12 @@ struct CloudLogin {
 // 4.0: pairing_code = kod koji je korisnik upisao s prozora poslužitelja; obavezan kad otisak još nije poznat (LAN)
 CloudLogin cloud_login(const std::string& base_url, const std::string& email, std::string password, const std::string& known_pin,
                        const std::string& totp = {}, std::string new_password = {}, const std::string& pairing_code = {});
+// Zaboravljena lozinka (4.0): isto uparivanje kao prijava – e-pošta, kod i nova lozinka idu samo potvrđenom poslužitelju.
+// Vraćaju poruku za korisnika; bacaju CloudError / CloudPairingNeeded (i CloudPasswordChange za slabu novu lozinku).
+std::string cloud_forgot_password(const std::string& base_url, const std::string& email, const std::string& known_pin,
+                                  const std::string& pairing_code = {});
+std::string cloud_reset_password(const std::string& base_url, const std::string& email, const std::string& code, std::string new_password,
+                                 const std::string& known_pin, const std::string& pairing_code = {});
 void cloud_logout(const Settings& s);  // poništava oznaku na poslužitelju (ne baca)
 
 // JSON s poslužitelja prema postavkama klijenta (cloud_url, cloud_token_enc, cloud_cert_pin)

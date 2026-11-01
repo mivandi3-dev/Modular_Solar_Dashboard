@@ -107,6 +107,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 .hint { color: var(--green); font-weight: 700; font-size: .74rem; margin-left: 6px; }
 
 /* ---- izbori (razlučivost, tema) ---- */
+.forgot { margin-top: 14px; display: grid; gap: 10px; }
+.forgot summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.forgot[open] summary { color: var(--text); margin-bottom: 4px; }
+.forgot .btn { justify-self: start; }
 .choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .choices.two { grid-template-columns: 1fr 1fr; }
 .choices.three { grid-template-columns: repeat(3, 1fr); }

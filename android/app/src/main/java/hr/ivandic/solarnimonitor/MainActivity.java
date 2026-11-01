@@ -449,6 +449,43 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Zaboravljena lozinka: kod e-poštom (reset = false) ili nova lozinka uz kod (reset = true); odgovor na __solariCallback. */
+        private void passwordFlow(String json, String callbackId, boolean reset) {
+            io.execute(() -> {
+                try {
+                    JSONObject f = new JSONObject(json);
+                    String url = Prefs.normalize(f.optString("url"));
+                    if (url == null || url.isEmpty()) {
+                        callback(callbackId, result(false, "Upišite adresu poslužitelja, npr. https://solar.tvrtka.hr"));
+                        return;
+                    }
+                    String message = reset
+                            ? ServerClient.resetPassword(url, f.optString("email"), f.optString("code"), f.optString("new_password"),
+                                                         prefs.knownPin(url), f.optString("pairing_code"))
+                            : ServerClient.forgotPassword(url, f.optString("email"), prefs.knownPin(url), f.optString("pairing_code"));
+                    callback(callbackId, result(true, message));
+                } catch (ServerClient.PairingNeeded e) {
+                    JSONObject need = result(false, e.getMessage());
+                    try { need.put("pairing", true); } catch (JSONException ignored) { /* ne može se dogoditi */ }
+                    callback(callbackId, need);
+                } catch (ServerClient.PasswordChange | ServerClient.ServerException e) {
+                    callback(callbackId, result(false, e.getMessage()));
+                } catch (SocketTimeoutException e) {
+                    callback(callbackId, result(false, "Poslužitelj ne odgovara."));
+                } catch (IOException e) {
+                    callback(callbackId, result(false, "Nije moguće spojiti se na poslužitelj."));
+                } catch (JSONException e) {
+                    callback(callbackId, result(false, "Odgovor nije od Solarnog poslužitelja – provjerite adresu."));
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void forgotPassword(String json, String callbackId) { passwordFlow(json, callbackId, false); }
+
+        @JavascriptInterface
+        public void resetPassword(String json, String callbackId) { passwordFlow(json, callbackId, true); }
+
         /** Otvara otpauth:// u aplikaciji autentifikatoru na istom mobitelu (QR kod se ne može skenirati sam sobom). */
         @JavascriptInterface
         public boolean openAuthenticator(String uri) {

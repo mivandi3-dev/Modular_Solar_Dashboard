@@ -50,6 +50,19 @@ TEST_CASE("Resend: jednokratni kod – engleski predložak, kod velik u sredini,
     CHECK(m.text.find("15 Jan 2027, 08:00 UTC") != std::string::npos);
 }
 
+TEST_CASE("Resend: kod za zaboravljenu lozinku – engleski predložak, kod velik u sredini, rok 30 min, escapiranje") {
+    const std::time_t until = 1'800'000'000;
+    const auto m = password_reset_mail("ABCD-EFGH", "<i>Ivo</i>", "ivo@example.com", "Plant", until);
+    CHECK(m.subject == "Your Solar Dashboard password reset code");
+    CHECK(m.html.find("ABCD-EFGH") != std::string::npos);
+    CHECK(m.html.find("font-size:40px") != std::string::npos);
+    CHECK(m.html.find("Use the code before it expires: 15 Jan 2027, 08:00 UTC") != std::string::npos);
+    CHECK(m.html.find("valid for 30 minutes") != std::string::npos);
+    CHECK(m.html.find("your current password stays unchanged") != std::string::npos);
+    CHECK(m.html.find("<i>Ivo</i>") == std::string::npos);
+    CHECK(m.text.find("ABCD-EFGH") != std::string::npos);
+}
+
 TEST_CASE("Resend: obavijest na jeziku aplikacije, tekst uređaja se escapira") {
     set_language("en");
     const auto en = alert_mail("Device offline", "Line 1\nLine <2>\n\nNext", "Plant");

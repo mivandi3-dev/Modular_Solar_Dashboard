@@ -1054,6 +1054,23 @@
   "Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.": "通知とエラーはアプリの言語で modular@solardashboard.bid から、新規ユーザー登録用のワンタイムコードは registration@solardashboard.bid から送信されます。キーは暗号化（Windows DPAPI）して保存され、表示されることはありません。",
   "spremljen – ostavite prazno da ostane isti": "保存済み – 変更しない場合は空欄のまま",
   "prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku": "空欄 = ワンタイムコード（72 時間有効）をユーザーにメールで送信します。ユーザーはこれで登録し、自分のパスワードを設定します",
-  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "新しいコードをメールで送信（パスワードを忘れた場合）"
+  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "新しいコードをメールで送信（パスワードを忘れた場合）",
+  "Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.": "サーバーにメール送信が設定されていません。管理者に連絡してください。",
+  "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.": "このアドレスのアカウントが存在する場合、コードをメールで送信しました。30 分間有効です。",
+  "Nova lozinka je postavljena – prijavite se.": "新しいパスワードを設定しました。ログインしてください。",
+  "Kod nije točan ili je istekao – zatražite novi.": "コードが正しくないか期限切れです。新しいコードを要求してください。",
+  "Upišite e-poštu računa.": "アカウントのメールアドレスを入力してください。",
+  "Previše pokušaja – pokušajte ponovno za nekoliko minuta.": "試行回数が多すぎます。数分後に再試行してください。",
+  "Zaboravljena lozinka?": "パスワードをお忘れですか？",
+  "Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "アカウントのメールアドレスを入力してコードを要求してください。 コードはメールで届き、30 分間有効で 1 回だけ使用できます。使用するまでは以前のパスワードが有効です。",
+  "Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "アカウントのメールアドレス（およびサーバーのアドレス、ローカルネットワークでの初回ログイン時はペアリングコード）を入力してコードを要求してください。 コードはメールで届き、30 分間有効で 1 回だけ使用できます。使用するまでは以前のパスワードが有効です。",
+  "Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "サーバーのアドレスとアカウントのメールアドレス（ローカルネットワークでの初回ログイン時はペアリングコードも）を入力してコードを要求してください。 コードはメールで届き、30 分間有効で 1 回だけ使用できます。使用するまでは以前のパスワードが有効です。",
+  "Pošalji kod e-poštom": "コードをメールで送信",
+  "Kod iz e-pošte": "メールに記載のコード",
+  "Postavi novu lozinku": "新しいパスワードを設定",
+  "Šaljem…": "送信中…",
+  "Upišite kod iz e-pošte.": "メールに記載のコードを入力してください。",
+  "Nove lozinke se ne podudaraju.": "新しいパスワードが一致しません。",
+  "Poslužitelj je vratio grešku.": "サーバーがエラーを返しました。"
  }
 }

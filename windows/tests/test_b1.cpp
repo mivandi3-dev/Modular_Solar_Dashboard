@@ -768,3 +768,81 @@ TEST_CASE("R-14a: shema 1 → 2 nadogradi se na mjestu, prijave i korisnici osta
     sqlite3_finalize(st);
     sqlite3_close(h);
 }
+
+// ================================================================ zaboravljena lozinka (kod e-poštom)
+TEST_CASE("Zaboravljena lozinka: kod iz e-pošte postavlja novu lozinku, stara vrijedi do tada, prijave se poništavaju") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    users.create({"Ana", "Kovač", "ana@primjer.hr", kPw, Role::User}, 1000);
+    std::time_t t = 1'800'000'000;
+    const auto session = users.login("ana@primjer.hr", kPw, "mob", t);
+    REQUIRE(session.status == St::Ok);
+    // nepoznata e-pošta: ništa se ne šalje (odgovor korisniku je isti)
+    CHECK_FALSE(users.request_password_reset("nitko@primjer.hr", t).send);
+    const auto req = users.request_password_reset("ANA@primjer.hr", t);
+    REQUIRE(req.send);
+    CHECK(req.email == "ana@primjer.hr");
+    CHECK(req.first_name == "Ana");
+    REQUIRE(req.code.size() == 9);
+    CHECK(req.code[4] == '-');
+    CHECK(req.valid_until == t + kResetSeconds);
+    // stara lozinka i dalje vrijedi (zahtjev ne zaključava račun)
+    CHECK(users.login("ana@primjer.hr", kPw, "x", t).status == St::Ok);
+    // prečest zahtjev: nema novog koda, stari ostaje
+    CHECK_FALSE(users.request_password_reset("ana@primjer.hr", t + 30).send);
+    // slaba nova lozinka: kod ostaje važeći
+    CHECK(users.reset_password("ana@primjer.hr", req.code, "kratka", t + 60).status == ResetResult::Status::PasswordInvalid);
+    // kod bez crtice i malim slovima
+    std::string lower = req.code.substr(0, 4) + req.code.substr(5);
+    for (auto& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    CHECK(users.reset_password("ana@primjer.hr", lower, "Novo-Sunce-2027!", t + 60).status == ResetResult::Status::Ok);
+    CHECK(users.login("ana@primjer.hr", kPw, "x", t + 61).status == St::BadCredentials);
+    CHECK(users.login("ana@primjer.hr", "Novo-Sunce-2027!", "x", t + 61).status == St::Ok);
+    CHECK_FALSE(users.session_user(session.token, t + 61));  // stare prijave poništene
+    // kod je iskorišten
+    CHECK(users.reset_password("ana@primjer.hr", req.code, "Jos-Jedna-2028!", t + 62).status == ResetResult::Status::BadCode);
+}
+
+TEST_CASE("Zaboravljena lozinka: 5 pogrešnih kodova poništava kod, istek, blokiran račun") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    const int64_t id = users.create({"Ivo", "Horvat", "ivo@primjer.hr", kPw, Role::User}, 1000);
+    std::time_t t = 1'800'000'000;
+    auto req = users.request_password_reset("ivo@primjer.hr", t);
+    REQUIRE(req.send);
+    for (int i = 0; i < kResetMaxTries; ++i) {
+        CHECK(users.reset_password("ivo@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", t + 1).status == ResetResult::Status::BadCode);
+    }
+    CHECK(users.reset_password("ivo@primjer.hr", req.code, "Novo-Sunce-2027!", t + 2).status == ResetResult::Status::BadCode);
+    // istek nakon 30 min
+    t += kResetResendSeconds;
+    req = users.request_password_reset("ivo@primjer.hr", t);
+    REQUIRE(req.send);
+    CHECK(users.reset_password("ivo@primjer.hr", req.code, "Novo-Sunce-2027!", t + kResetSeconds + 1).status == ResetResult::Status::BadCode);
+    // administrator mijenja lozinku / blokira račun: neiskorišteni kod prestaje vrijediti, blokiran račun ne dobiva kod
+    t += kResetSeconds + kResetResendSeconds;
+    req = users.request_password_reset("ivo@primjer.hr", t);
+    REQUIRE(req.send);
+    users.set_disabled(id, true, t);
+    CHECK(users.reset_password("ivo@primjer.hr", req.code, "Novo-Sunce-2027!", t + 1).status == ResetResult::Status::BadCode);
+    CHECK_FALSE(users.request_password_reset("ivo@primjer.hr", t + kResetResendSeconds + 1).send);
+    users.set_disabled(id, false, t + 2);
+    const auto code2 = users.request_password_reset("ivo@primjer.hr", t + 2 * kResetResendSeconds).code;
+    REQUIRE_FALSE(code2.empty());
+    CHECK_FALSE(users.issue_activation_code(id, t + 2 * kResetResendSeconds + 1).empty());
+    CHECK(users.reset_password("ivo@primjer.hr", code2, "Novo-Sunce-2027!", t + 2 * kResetResendSeconds + 2).status == ResetResult::Status::BadCode);
+}
+
+TEST_CASE("Zaboravljena lozinka: račun s aktivacijom na čekanju postavlja lozinku kodom (aktivacija završava)") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    std::string activation;
+    const int64_t id = users.create({"Mia", "Babić", "mia@primjer.hr", "", Role::User}, 1000, &activation);
+    REQUIRE(users.get(id)->activation_pending);
+    const std::time_t t = 1'800'000'000;
+    const auto req = users.request_password_reset("mia@primjer.hr", t);
+    REQUIRE(req.send);
+    CHECK(users.reset_password("mia@primjer.hr", req.code, "Novo-Sunce-2027!", t + 1).status == ResetResult::Status::Ok);
+    CHECK_FALSE(users.get(id)->activation_pending);
+    CHECK(users.login("mia@primjer.hr", "Novo-Sunce-2027!", "x", t + 2).status == St::Ok);
+}

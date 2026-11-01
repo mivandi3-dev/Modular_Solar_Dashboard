@@ -59,7 +59,8 @@ std::optional<HttpRequest> request_from_ipc(const json& m, std::string* error) {
     const auto cf_ip = opt_string(m, "cf_ip", 45, &ok);
     const auto body = opt_string(m, "body", kApiMaxBody, &ok);
     if (!ok) return set_error(error, "field_type"), std::nullopt;
-    static const std::set<std::string> routes = {"ping", "login", "logout", "me", "password", "info", "dashboard", "image", "report"};
+    static const std::set<std::string> routes = {"ping",      "login",  "logout", "me",     "password",       "info",
+                                                 "dashboard", "image",  "report", "forgot_password", "reset_password"};
     if (!route || !routes.count(*route)) return set_error(error, "route"), std::nullopt;
     if (!method || (*method != "GET" && *method != "HEAD" && *method != "POST")) return set_error(error, "method"), std::nullopt;
     if (!client_ip || !valid_ip_literal(*client_ip)) return set_error(error, "client_ip"), std::nullopt;

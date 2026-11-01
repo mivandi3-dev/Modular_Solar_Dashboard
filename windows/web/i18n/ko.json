@@ -1054,6 +1054,23 @@
   "Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.": "알림과 오류는 앱 언어로 modular@solardashboard.bid에서, 신규 사용자 등록용 일회용 코드는 registration@solardashboard.bid에서 전송됩니다. 키는 암호화(Windows DPAPI)되어 저장되며 표시되지 않습니다.",
   "spremljen – ostavite prazno da ostane isti": "저장됨 – 유지하려면 비워 두세요",
   "prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku": "비워 두면 = 일회용 코드(72시간 유효)가 사용자에게 이메일로 전송되며, 사용자는 이 코드로 등록하고 자신의 비밀번호를 설정합니다",
-  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "새 코드를 이메일로 보내기(비밀번호 분실)"
+  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "새 코드를 이메일로 보내기(비밀번호 분실)",
+  "Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.": "서버에 이메일 전송이 설정되어 있지 않습니다. 관리자에게 문의하세요.",
+  "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.": "이 주소의 계정이 있으면 코드를 이메일로 보냈습니다. 30분간 유효합니다.",
+  "Nova lozinka je postavljena – prijavite se.": "새 비밀번호가 설정되었습니다. 로그인하세요.",
+  "Kod nije točan ili je istekao – zatražite novi.": "코드가 올바르지 않거나 만료되었습니다. 새 코드를 요청하세요.",
+  "Upišite e-poštu računa.": "계정 이메일을 입력하세요.",
+  "Previše pokušaja – pokušajte ponovno za nekoliko minuta.": "시도 횟수가 너무 많습니다. 몇 분 후 다시 시도하세요.",
+  "Zaboravljena lozinka?": "비밀번호를 잊으셨나요?",
+  "Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "계정 이메일을 입력하고 코드를 요청하세요. 코드는 이메일로 도착하며 30분간 유효하고 한 번만 사용할 수 있습니다. 사용하기 전까지는 기존 비밀번호가 유효합니다.",
+  "Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "계정 이메일(그리고 서버 주소와, 로컬 네트워크에서 처음 로그인할 때는 페어링 코드)을 입력하고 코드를 요청하세요. 코드는 이메일로 도착하며 30분간 유효하고 한 번만 사용할 수 있습니다. 사용하기 전까지는 기존 비밀번호가 유효합니다.",
+  "Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "서버 주소와 계정 이메일(로컬 네트워크에서 처음 로그인할 때는 페어링 코드도)을 입력하고 코드를 요청하세요. 코드는 이메일로 도착하며 30분간 유효하고 한 번만 사용할 수 있습니다. 사용하기 전까지는 기존 비밀번호가 유효합니다.",
+  "Pošalji kod e-poštom": "이메일로 코드 받기",
+  "Kod iz e-pošte": "이메일의 코드",
+  "Postavi novu lozinku": "새 비밀번호 설정",
+  "Šaljem…": "보내는 중…",
+  "Upišite kod iz e-pošte.": "이메일의 코드를 입력하세요.",
+  "Nove lozinke se ne podudaraju.": "새 비밀번호가 일치하지 않습니다.",
+  "Poslužitelj je vratio grešku.": "서버가 오류를 반환했습니다."
  }
 }

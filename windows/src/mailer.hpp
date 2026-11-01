@@ -31,6 +31,9 @@ std::string html_escape(const std::string& s);
 // Predložak jednokratnog aktivacijskog koda (uvijek na engleskom; kod velikim slovima u sredini poruke)
 MailContent activation_mail(const std::string& code, const std::string& first_name, const std::string& email,
                             const std::string& plant_name, std::time_t valid_until);
+// Predložak koda za zaboravljenu lozinku (engleski; kod velik u sredini, rok 30 min)
+MailContent password_reset_mail(const std::string& code, const std::string& first_name, const std::string& email,
+                                const std::string& plant_name, std::time_t valid_until);
 // Predložak obavijesti/greške na trenutnom jeziku (set_language): naslov, tekst poruke, podnožje
 MailContent alert_mail(const std::string& subject, const std::string& body, const std::string& plant_name);
 
@@ -52,5 +55,8 @@ std::string resend_key(const Settings& s);
 // Pošalji jednokratni kod novom korisniku (ili novi kod postojećem). Vraća poruku za administratora; baca MailError.
 std::string send_activation_mail(const Settings& s, const std::string& email, const std::string& first_name,
                                  const std::string& code, std::time_t valid_until);
+// Kod za zaboravljenu lozinku (pošiljatelj registration@…); baca MailError
+void send_password_reset_mail(const Settings& s, const std::string& email, const std::string& first_name, const std::string& code,
+                              std::time_t valid_until);
 
 }  // namespace sm

@@ -1054,6 +1054,23 @@
   "Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.": "通知和错误以应用语言从 modular@solardashboard.bid 发送，新用户的一次性注册代码从 registration@solardashboard.bid 发送。密钥经加密（Windows DPAPI）保存，绝不显示。",
   "spremljen – ostavite prazno da ostane isti": "已保存——留空则保持不变",
   "prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku": "留空 = 通过邮件向用户发送一次性代码（72 小时有效）；用户用它注册并设置自己的密码",
-  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "通过邮件发送新代码（忘记密码）"
+  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "通过邮件发送新代码（忘记密码）",
+  "Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.": "服务器未设置邮件发送——请联系管理员。",
+  "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.": "如果存在使用此地址的账户，代码已通过邮件发送，有效期 30 分钟。",
+  "Nova lozinka je postavljena – prijavite se.": "新密码已设置——请登录。",
+  "Kod nije točan ili je istekao – zatražite novi.": "代码错误或已过期——请重新获取。",
+  "Upišite e-poštu računa.": "请输入账户邮箱。",
+  "Previše pokušaja – pokušajte ponovno za nekoliko minuta.": "尝试次数过多——请几分钟后重试。",
+  "Zaboravljena lozinka?": "忘记密码？",
+  "Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "请输入账户邮箱并获取代码。 代码通过邮件发送，有效期 30 分钟，只能使用一次。在使用之前，旧密码仍然有效。",
+  "Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "请输入账户邮箱（以及服务器地址；在本地网络首次登录时还需配对代码）并获取代码。 代码通过邮件发送，有效期 30 分钟，只能使用一次。在使用之前，旧密码仍然有效。",
+  "Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "请输入服务器地址和账户邮箱（在本地网络首次登录时还需配对代码）并获取代码。 代码通过邮件发送，有效期 30 分钟，只能使用一次。在使用之前，旧密码仍然有效。",
+  "Pošalji kod e-poštom": "通过邮件发送代码",
+  "Kod iz e-pošte": "邮件中的代码",
+  "Postavi novu lozinku": "设置新密码",
+  "Šaljem…": "正在发送…",
+  "Upišite kod iz e-pošte.": "请输入邮件中的代码。",
+  "Nove lozinke se ne podudaraju.": "两次输入的新密码不一致。",
+  "Poslužitelj je vratio grešku.": "服务器返回错误。"
  }
 }

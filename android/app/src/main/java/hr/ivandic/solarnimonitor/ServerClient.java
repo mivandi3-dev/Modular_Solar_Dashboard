@@ -251,6 +251,70 @@ final class ServerClient {
         }
     }
 
+    /** /ping (verzija 4) i SMA-04 uparivanje – isto kao prijava; vraća otisak za sljedeći poziv ("" = javni certifikat). */
+    static String confirmedPin(String base, String knownPin, String enteredPairingCode) throws IOException {
+        Fetched p = request(base, "/api/v1/ping", "GET", "", null, knownPin);
+        JSONObject info;
+        try {
+            info = new JSONObject(new String(p.body(), StandardCharsets.UTF_8));
+        } catch (JSONException e) {
+            throw new ServerException("Odgovor nije od Solarnog poslužitelja – provjerite adresu.");
+        }
+        if (p.status() != 200 || info.optInt("api", 0) < 4) throw new ServerException("Poslužitelj nije verzije 4.0 – instalirajte Solarni poslužitelj 4.0.");
+        String pin = pinnedHost(base) ? p.certPin() : "";
+        if (pinnedHost(base) && (knownPin == null || knownPin.isEmpty()) && !pairingMatches(enteredPairingCode, pin)) {
+            throw new PairingNeeded(enteredPairingCode == null || enteredPairingCode.trim().isEmpty()
+                    ? "Upišite kod za uparivanje s prozora Solarnog poslužitelja (Postavke → Poslužitelj)."
+                    : "Kod za uparivanje ne odgovara certifikatu poslužitelja – provjerite kod i adresu (moguće presretanje veze).");
+        }
+        return pin;
+    }
+
+    private static JSONObject jsonBody(Fetched r) throws ServerException {
+        try {
+            return new JSONObject(new String(r.body(), StandardCharsets.UTF_8));
+        } catch (JSONException e) {
+            throw new ServerException("Odgovor nije od Solarnog poslužitelja – provjerite adresu.");
+        }
+    }
+
+    /** Zaboravljena lozinka (4.0): kod stiže e-poštom; odgovor je isti za svaku adresu (ne otkriva račun). */
+    static String forgotPassword(String base, String email, String knownPin, String pairingCode) throws IOException {
+        String e = email == null ? "" : email.trim();
+        if (!e.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new ServerException("Upišite e-poštu računa.");
+        String pin = confirmedPin(base, knownPin, pairingCode);
+        String body;
+        try {
+            body = new JSONObject().put("email", e).toString();
+        } catch (JSONException x) {
+            throw new IOException(x);
+        }
+        Fetched r = request(base, "/api/v1/forgot_password", "POST", "", body, pin);
+        JSONObject j = jsonBody(r);
+        if (r.status() == 429) throw new ServerException("Previše pokušaja – pokušajte ponovno za nekoliko minuta.");
+        if (r.status() != 200) throw new ServerException(j.optString("message", "Poslužitelj je vratio grešku."));
+        return j.optString("message", "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.");
+    }
+
+    /** Nova lozinka uz kod iz e-pošte; slaba lozinka → PasswordChange (kod ostaje važeći). */
+    static String resetPassword(String base, String email, String code, String newPassword, String knownPin, String pairingCode)
+            throws IOException {
+        String pin = confirmedPin(base, knownPin, pairingCode);
+        String body;
+        try {
+            body = new JSONObject().put("email", email == null ? "" : email.trim()).put("code", code == null ? "" : code.trim())
+                    .put("new_password", newPassword == null ? "" : newPassword).toString();
+        } catch (JSONException x) {
+            throw new IOException(x);
+        }
+        Fetched r = request(base, "/api/v1/reset_password", "POST", "", body, pin);
+        JSONObject j = jsonBody(r);
+        if (r.status() == 200) return j.optString("message", "Nova lozinka je postavljena – prijavite se.");
+        if ("password_invalid".equals(j.optString("error"))) throw new PasswordChange(j.optString("message", "Nova lozinka ne zadovoljava pravila."));
+        if (r.status() == 429) throw new ServerException("Previše pokušaja – pokušajte ponovno za nekoliko minuta.");
+        throw new ServerException(j.optString("message", "Kod nije točan ili je istekao – zatražite novi."));
+    }
+
     static byte[] readAll(InputStream in, int max) throws IOException {
         try (in) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();

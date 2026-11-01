@@ -46,6 +46,13 @@ inline constexpr const char* kLoginSourceLocal = "local";
 inline constexpr int kAccountSoftLimit = 50;
 inline constexpr std::time_t kAccountWindowSeconds = 24 * 3600;
 inline constexpr std::time_t kThrottleSeconds = 60;
+// Zaboravljena lozinka (4.0, samoposluživanje): kod XXXX-XXXX (8 znakova base32, 40 bita) e-poštom; vrijedi 30 min,
+// najviše 5 pogrešnih pokušaja po kodu, novi kod najranije za 2 min. Stara lozinka vrijedi dok se kod ne iskoristi
+// (zahtjev ne može zaključati tuđi račun); u bazi samo PBKDF2 koda. Svaka promjena lozinke poništava neiskorišteni kod.
+inline constexpr size_t kResetCodeChars = 8;
+inline constexpr std::time_t kResetSeconds = 30 * 60;
+inline constexpr std::time_t kResetResendSeconds = 120;
+inline constexpr int kResetMaxTries = 5;
 inline constexpr std::time_t kSessionIdleSeconds = 30 * 24 * 3600;
 inline constexpr std::time_t kSessionMaxSeconds = 90 * 24 * 3600;
 
@@ -86,6 +93,17 @@ struct UserError : std::runtime_error {
 
 std::optional<std::string> password_problem(const std::string& password, const std::string& email);  // nullopt = u redu
 bool valid_email(const std::string& email);
+
+// Zahtjev za kod: send = false za nepoznatu e-poštu, blokiran račun ili prečest zahtjev (odgovor korisniku je uvijek isti)
+struct ResetRequest {
+    bool send = false;
+    std::string email, first_name, code;
+    std::time_t valid_until = 0;
+};
+struct ResetResult {
+    enum class Status { Ok, BadCode, PasswordInvalid } status = Status::BadCode;
+    std::string problem;  // PasswordInvalid: poruka za korisnika
+};
 
 struct LoginResult {
     // TotpRequired: lozinka točna, treba kod iz aplikacije; TotpSetup: treba postaviti aplikaciju (QR kod u totp_uri);
@@ -130,6 +148,9 @@ public:
     std::optional<UserInfo> session_user(const std::string& token, std::time_t now);  // produžuje prijavu
     void logout(const std::string& token);
     void change_password(int64_t id, const std::string& old_password, const std::string& new_password, std::time_t now);
+    // Zaboravljena lozinka: kod za e-poštu, zatim nova lozinka uz kod (prijave se poništavaju, aktivacija na čekanju završava)
+    ResetRequest request_password_reset(const std::string& email, std::time_t now);
+    ResetResult reset_password(const std::string& email, const std::string& code, std::string new_password, std::time_t now);
     int active_sessions(int64_t id, std::time_t now);
 
 private:

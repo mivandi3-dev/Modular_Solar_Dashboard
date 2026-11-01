@@ -167,6 +167,34 @@ const actions = {
       showErrors({});
     }
   },
+  // zaboravljena lozinka: kod e-poštom, zatim nova lozinka uz kod
+  "forgot-send": async (btn) => {
+    const f = collect(), out = $("#forgot .fp-result");
+    btn.disabled = true;
+    setResult(out, null, T("Šaljem…"));
+    const res = await callJava((id) => A.forgotPassword(JSON.stringify({ url: f.mode === "local" ? f.local_url : f.cloud_url,
+      email: $("#email").value.trim(), pairing_code: ($("#pairing") || { value: "" }).value.trim() }), id));
+    btn.disabled = false;
+    setResult(out, { ok: res.ok, message: T(res.message) });
+    if (res.pairing && $("#pairing")) $("#pairing").focus();
+  },
+  "forgot-reset": async (btn) => {
+    const f = collect(), box = $("#forgot"), out = $(".fp-result", box);
+    const code = $(".fp-code", box).value.trim(), np1 = $(".fp-np1", box).value, np2 = $(".fp-np2", box).value;
+    if (!code) { setResult(out, { ok: false, message: T("Upišite kod iz e-pošte.") }); return; }
+    if (!np1 || np1 !== np2) { setResult(out, { ok: false, message: T("Nove lozinke se ne podudaraju.") }); return; }
+    btn.disabled = true;
+    setResult(out, null, T("Spremam (sigurno spremanje lozinke traje sekundu)…"));
+    const res = await callJava((id) => A.resetPassword(JSON.stringify({ url: f.mode === "local" ? f.local_url : f.cloud_url,
+      email: $("#email").value.trim(), code, new_password: np1, pairing_code: ($("#pairing") || { value: "" }).value.trim() }), id));
+    btn.disabled = false;
+    setResult(out, { ok: res.ok, message: T(res.message) });
+    if (res.ok) {
+      $$(".fp-code, .fp-np1, .fp-np2", box).forEach((el) => { el.value = ""; });
+      box.open = false;
+      $("#password").focus();
+    }
+  },
   "open-auth": () => {
     if (!A.openAuthenticator(totpUri)) setResult($("#test-result"), { ok: false, message: T("Na mobitelu nije instalirana aplikacija autentifikator (npr. Google Authenticator).") });
   },

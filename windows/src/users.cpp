@@ -268,7 +268,10 @@ void UserStore::migrate() {
         {"must_change", "INTEGER NOT NULL DEFAULT 0"}, {"default_set_at", "INTEGER NOT NULL DEFAULT 0"},
         // 4.0 (R-14a): neuspjesi računa sa svih izvora u razdoblju od 24 h (usporavanje i upozorenje)
         {"acct_window", "INTEGER NOT NULL DEFAULT 0"}, {"acct_failed", "INTEGER NOT NULL DEFAULT 0"},
-        {"acct_alerted", "INTEGER NOT NULL DEFAULT 0"}};
+        {"acct_alerted", "INTEGER NOT NULL DEFAULT 0"},
+        // 4.0: zaboravljena lozinka (PBKDF2 koda, rok, vrijeme zadnjeg slanja, pogrešni pokušaji)
+        {"reset_salt", "BLOB"}, {"reset_hash", "BLOB"}, {"reset_until", "INTEGER NOT NULL DEFAULT 0"},
+        {"reset_sent", "INTEGER NOT NULL DEFAULT 0"}, {"reset_tries", "INTEGER NOT NULL DEFAULT 0"}};
     for (const auto& [name, type] : columns) {
         if (!have.count(name)) exec(db_, ("ALTER TABLE users ADD COLUMN " + std::string(name) + " " + type).c_str());
     }
@@ -361,8 +364,9 @@ void UserStore::set_password_hash(int64_t id, const std::string& password, std::
     const bool must_change = activation;  // stupci must_change/default_set_at: aktivacija na čekanju i vrijeme izdavanja koda
     Bytes salt = random_bytes(kSaltBytes);
     Bytes hash = pbkdf2_sha256(password, salt, iterations_, kHashBytes);
+    // svaka nova lozinka ili aktivacijski kod poništava i neiskorišteni kod za zaboravljenu lozinku
     Stmt q(db_, "UPDATE users SET pw_salt = ?, pw_hash = ?, pw_iter = ?, failed = 0, locked_until = 0, updated = ?, must_change = ?,"
-                " default_set_at = ? WHERE id = ?");
+                " default_set_at = ?, reset_salt = NULL, reset_hash = NULL, reset_until = 0, reset_tries = 0 WHERE id = ?");
     q.bind(1, salt).bind(2, hash).bind(3, static_cast<int64_t>(iterations_)).bind(4, static_cast<int64_t>(now))
         .bind(5, static_cast<int64_t>(must_change ? 1 : 0)).bind(6, static_cast<int64_t>(must_change ? now : 0)).bind(7, id);
     clear_failures(id);  // nova lozinka ili kod: sva zaključavanja tog računa prestaju
@@ -740,6 +744,95 @@ std::string UserStore::issue_activation_code(int64_t id, std::time_t now) {
     std::lock_guard lock(mu_);
     if (!row_by_id(id)) throw UserError({{"general", tr("Korisnik ne postoji.")}});
     return new_activation_code(id, now);
+}
+
+ResetRequest UserStore::request_password_reset(const std::string& email, std::time_t now) {
+    std::lock_guard lock(mu_);
+    ResetRequest out;
+    const auto row = row_by_email(email);
+    if (!row || row->disabled) {
+        // isti rad kao za postojeći račun (PBKDF2), da se po vremenu ne može doznati postoji li račun
+        Bytes dummy = pbkdf2_sha256("XXXXXXXX", Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+        wipe(dummy);
+        return out;
+    }
+    {
+        Stmt q(db_, "SELECT reset_sent FROM users WHERE id = ?");
+        q.bind(1, row->id);
+        if (q.step() && now - q.i64(0) < kResetResendSeconds) return out;  // prečesto: bez novog koda i bez e-poruke
+    }
+    Bytes raw = random_bytes(5);  // 40 bita → točno 8 znakova base32
+    std::string code = base32(raw).substr(0, kResetCodeChars);
+    wipe(raw);
+    Bytes salt = random_bytes(kSaltBytes);
+    Bytes hash = pbkdf2_sha256(code, salt, iterations_, kHashBytes);
+    Stmt q(db_, "UPDATE users SET reset_salt = ?, reset_hash = ?, reset_until = ?, reset_sent = ?, reset_tries = 0 WHERE id = ?");
+    q.bind(1, salt).bind(2, hash).bind(3, static_cast<int64_t>(now + kResetSeconds)).bind(4, static_cast<int64_t>(now)).bind(5, row->id);
+    q.step();
+    wipe(hash);
+    out.send = true;
+    out.email = open("email", row->email_enc);
+    out.first_name = open("first_name", row->first_enc);
+    out.code = code.substr(0, 4) + "-" + code.substr(4, 4);
+    out.valid_until = now + kResetSeconds;
+    wipe(code);
+    log_info("Korisnici: zatražen kod za zaboravljenu lozinku (korisnik #" + std::to_string(row->id) + ")");
+    return out;
+}
+
+ResetResult UserStore::reset_password(const std::string& email, const std::string& code, std::string new_password, std::time_t now) {
+    std::lock_guard lock(mu_);
+    ResetResult res;
+    const std::string entered = normalize_activation_code(code);
+    const auto row = entered.size() == kResetCodeChars && new_password.size() <= kMaxPasswordLength ? row_by_email(email) : std::nullopt;
+    if (!row || row->disabled) {
+        Bytes dummy = pbkdf2_sha256(entered, Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+        wipe(dummy);
+        wipe(new_password);
+        return res;
+    }
+    Bytes salt, hash;
+    std::time_t until = 0;
+    int tries = 0;
+    {
+        Stmt q(db_, "SELECT reset_salt, reset_hash, reset_until, reset_tries FROM users WHERE id = ?");
+        q.bind(1, row->id);
+        if (q.step()) {
+            salt = q.blob(0);
+            hash = q.blob(1);
+            until = q.i64(2);
+            tries = static_cast<int>(q.i64(3));
+        }
+    }
+    bool good = false;
+    if (!salt.empty() && !hash.empty()) {
+        Bytes h = pbkdf2_sha256(entered, salt, iterations_, hash.size());
+        good = equal_ct(h, hash);
+        wipe(h);
+    }
+    if (!good || now > until || tries >= kResetMaxTries) {
+        wipe(new_password);
+        if (!hash.empty()) {  // pogrešan kod troši pokušaj; peti pogrešan poništava kod
+            const bool spent = tries + 1 >= kResetMaxTries;
+            Stmt q(db_, spent ? "UPDATE users SET reset_salt = NULL, reset_hash = NULL, reset_until = 0, reset_tries = 0 WHERE id = ?"
+                              : "UPDATE users SET reset_tries = reset_tries + 1 WHERE id = ?");
+            q.bind(1, row->id);
+            q.step();
+        }
+        return res;
+    }
+    const std::string email_plain = open("email", row->email_enc);
+    if (auto problem = password_problem(new_password, email_plain)) {  // kod ostaje važeći – korisnik bira drugu lozinku
+        wipe(new_password);
+        res.status = ResetResult::Status::PasswordInvalid;
+        res.problem = *problem;
+        return res;
+    }
+    set_password_hash(row->id, new_password, now, false);  // poništava kod, zaključavanja i sve prijave
+    wipe(new_password);
+    log_info("Korisnici: korisnik #" + std::to_string(row->id) + " je postavio novu lozinku kodom iz e-pošte");
+    res.status = ResetResult::Status::Ok;
+    return res;
 }
 
 void UserStore::revoke_all_sessions(int64_t id) {

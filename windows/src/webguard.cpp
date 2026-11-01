@@ -56,6 +56,7 @@ bool settings_only_method(const std::string& method) {
         "get_state",       "unlock",           "admin_login",     "setup_admin",       "admin_logout",
         "interfaces",      "test_logger",      "test_internet",   "serial_ports",      "geocode",
         "save",            "test_email",       "cloud_login",     "cloud_logout",      "users_list",
+        "cloud_forgot_password", "cloud_reset_password", "admin_forgot_password", "admin_reset_password",
         "user_save",       "user_set_disabled", "user_delete",    "user_reset_totp",   "user_reset_password", "user_logout_all",
         "get_report",      "save_report_csv",  "import_history",  "import_smartlogger", "choose_image",
         "reset_image",     "open_folder",      "close",           "remote_view_new_key"};

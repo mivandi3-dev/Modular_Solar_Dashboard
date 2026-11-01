@@ -1054,6 +1054,23 @@
   "Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.": "Les notifications et les erreurs sont envoyées depuis modular@solardashboard.bid dans la langue de l'application, et les codes d'inscription à usage unique des nouveaux utilisateurs depuis registration@solardashboard.bid. La clé est stockée chiffrée (Windows DPAPI) et n'est jamais affichée.",
   "spremljen – ostavite prazno da ostane isti": "enregistrée – laissez vide pour la conserver",
   "prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku": "vide = un code à usage unique (valable 72 heures) est envoyé par e-mail à l'utilisateur ; il s'en sert pour s'inscrire et définir son propre mot de passe",
-  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "Envoyer un nouveau code par e-mail (mot de passe oublié)"
+  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "Envoyer un nouveau code par e-mail (mot de passe oublié)",
+  "Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.": "Le serveur n'a pas d'envoi d'e-mails configuré – contactez l'administrateur.",
+  "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.": "Si un compte existe avec cette adresse, un code a été envoyé par e-mail. Il est valable 30 minutes.",
+  "Nova lozinka je postavljena – prijavite se.": "Le nouveau mot de passe est défini – connectez-vous.",
+  "Kod nije točan ili je istekao – zatražite novi.": "Le code est incorrect ou a expiré – demandez-en un nouveau.",
+  "Upišite e-poštu računa.": "Saisissez l'e-mail du compte.",
+  "Previše pokušaja – pokušajte ponovno za nekoliko minuta.": "Trop de tentatives – réessayez dans quelques minutes.",
+  "Zaboravljena lozinka?": "Mot de passe oublié ?",
+  "Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Saisissez l'e-mail du compte et demandez un code. Le code arrive par e-mail, est valable 30 minutes et ne peut être utilisé qu'une fois. Tant que vous ne l'utilisez pas, l'ancien mot de passe reste valable.",
+  "Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Saisissez l'e-mail du compte (ainsi que l'adresse du serveur et, lors de la première connexion sur le réseau local, le code d'appairage) et demandez un code. Le code arrive par e-mail, est valable 30 minutes et ne peut être utilisé qu'une fois. Tant que vous ne l'utilisez pas, l'ancien mot de passe reste valable.",
+  "Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Saisissez l'adresse du serveur et l'e-mail du compte (ainsi que, lors de la première connexion sur le réseau local, le code d'appairage) et demandez un code. Le code arrive par e-mail, est valable 30 minutes et ne peut être utilisé qu'une fois. Tant que vous ne l'utilisez pas, l'ancien mot de passe reste valable.",
+  "Pošalji kod e-poštom": "M'envoyer un code par e-mail",
+  "Kod iz e-pošte": "Code reçu par e-mail",
+  "Postavi novu lozinku": "Définir le nouveau mot de passe",
+  "Šaljem…": "Envoi…",
+  "Upišite kod iz e-pošte.": "Saisissez le code reçu par e-mail.",
+  "Nove lozinke se ne podudaraju.": "Les nouveaux mots de passe ne correspondent pas.",
+  "Poslužitelj je vratio grešku.": "Le serveur a renvoyé une erreur."
  }
 }

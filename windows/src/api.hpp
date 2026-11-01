@@ -43,6 +43,8 @@ struct ApiContext {
     const Catalog* catalog = nullptr;
     UserStore* users = nullptr;
     std::function<Settings()> settings;
+    // zaboravljena lozinka: slanje koda (prazno = Resend u zasebnoj niti; testovi podmeću vlastitu funkciju)
+    std::function<void(const Settings&, const ResetRequest&)> send_reset;
 };
 HttpServer::Handler api_handler(ApiContext ctx);
 

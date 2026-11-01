@@ -1054,6 +1054,23 @@
   "Obavijesti i greške šalju se s adrese modular@solardashboard.bid na jeziku aplikacije, a jednokratni kodovi za registraciju novih korisnika s adrese registration@solardashboard.bid. Ključ se sprema šifriran (Windows DPAPI) i nikad se ne prikazuje.": "Bildirimler ve hatalar uygulama dilinde modular@solardashboard.bid adresinden, yeni kullanıcıların tek kullanımlık kayıt kodları ise registration@solardashboard.bid adresinden gönderilir. Anahtar şifreli (Windows DPAPI) saklanır ve hiçbir zaman gösterilmez.",
   "spremljen – ostavite prazno da ostane isti": "kayıtlı – aynı kalması için boş bırakın",
   "prazno = jednokratni kod (vrijedi 72 sata) šalje se korisniku e-poštom; njime se registrira i postavlja svoju lozinku": "boş = kullanıcıya e-postayla tek kullanımlık bir kod (72 saat geçerli) gönderilir; kullanıcı bununla kaydolur ve kendi parolasını belirler",
-  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "Yeni kodu e-postayla gönder (unutulan parola)"
+  "Pošalji novi kod e-poštom (zaboravljena lozinka)": "Yeni kodu e-postayla gönder (unutulan parola)",
+  "Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru.": "Sunucuda e-posta gönderimi ayarlanmamış – yöneticiye başvurun.",
+  "Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.": "Bu adresle bir hesap varsa e-postayla bir kod gönderildi. 30 dakika geçerlidir.",
+  "Nova lozinka je postavljena – prijavite se.": "Yeni parola ayarlandı – giriş yapın.",
+  "Kod nije točan ili je istekao – zatražite novi.": "Kod hatalı veya süresi dolmuş – yenisini isteyin.",
+  "Upišite e-poštu računa.": "Hesabın e-posta adresini girin.",
+  "Previše pokušaja – pokušajte ponovno za nekoliko minuta.": "Çok fazla deneme – birkaç dakika sonra yeniden deneyin.",
+  "Zaboravljena lozinka?": "Parolanızı mı unuttunuz?",
+  "Upišite e-poštu računa i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Hesabın e-posta adresini girin ve kod isteyin. Kod e-postayla gelir, 30 dakika geçerlidir ve bir kez kullanılabilir. Kullanana kadar eski parolanız geçerli kalır.",
+  "Upišite e-poštu računa (i adresu poslužitelja te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Hesabın e-posta adresini (ve sunucu adresini, yerel ağdaki ilk girişte eşleştirme kodunu) girin ve kod isteyin. Kod e-postayla gelir, 30 dakika geçerlidir ve bir kez kullanılabilir. Kullanana kadar eski parolanız geçerli kalır.",
+  "Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod. Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.": "Sunucu adresini ve hesabın e-posta adresini (yerel ağdaki ilk girişte eşleştirme kodunu da) girin ve kod isteyin. Kod e-postayla gelir, 30 dakika geçerlidir ve bir kez kullanılabilir. Kullanana kadar eski parolanız geçerli kalır.",
+  "Pošalji kod e-poštom": "Kodu e-postayla gönder",
+  "Kod iz e-pošte": "E-postadaki kod",
+  "Postavi novu lozinku": "Yeni parolayı ayarla",
+  "Šaljem…": "Gönderiliyor…",
+  "Upišite kod iz e-pošte.": "E-postadaki kodu girin.",
+  "Nove lozinke se ne podudaraju.": "Yeni parolalar eşleşmiyor.",
+  "Poslužitelj je vratio grešku.": "Sunucu bir hata döndürdü."
  }
 }

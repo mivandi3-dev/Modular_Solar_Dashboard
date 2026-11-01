@@ -18,6 +18,9 @@
   .account { line-height: 1.45; }
   .account code { font-size: .72em; word-break: break-all; }
   [hidden].login, [hidden].logout { display: none !important; }
+  .forgot { display: grid; gap: 10px; margin: 4px 0 8px; }
+  .forgot summary { cursor: pointer; color: var(--muted); }
+  .forgot .btn { justify-self: start; }
   .totp[hidden], .recovery[hidden], .totp-setup[hidden] { display: none; }
   .newpw { padding: 12px 14px; border: 1px solid #F59E0B; border-radius: 12px; background: rgba(245,158,11,.08); }
   .newpw[hidden] { display: none; }
@@ -57,6 +60,17 @@
       <label class="login">Kod za uparivanje<input id="pairing" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"><small>s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži</small></label>
       <label class="login">Lozinka ili aktivacijski kod<input id="password" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false"><small>ne sprema se – aplikacija čuva samo šifriranu oznaku prijave</small></label>
       <span class="err" data-error="login"></span>
+      <details class="forgot login" id="forgot">
+        <summary>Zaboravljena lozinka?</summary>
+        <p class="small">Upišite adresu poslužitelja i e-poštu računa (te, pri prvoj prijavi u lokalnoj mreži, kod za uparivanje) i zatražite kod.
+          Kod stiže e-poštom, vrijedi 30 minuta i može se iskoristiti jednom. Dok ga ne iskoristite, vrijedi stara lozinka.</p>
+        <button type="button" class="btn" data-action="forgot-send">Pošalji kod e-poštom</button>
+        <label>Kod iz e-pošte<input class="fp-code" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX"></label>
+        <label>Nova lozinka<input class="fp-np1" type="password" autocomplete="new-password" autocapitalize="off"></label>
+        <label>Ponovite novu lozinku<input class="fp-np2" type="password" autocomplete="new-password" autocapitalize="off"></label>
+        <button type="button" class="btn primary" data-action="forgot-reset">Postavi novu lozinku</button>
+        <p class="result fp-result" role="status"></p>
+      </details>
       <div class="newpw" id="newpw" hidden>
         <p class="small"><b>Aktivacija računa:</b> prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste
           znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.</p>

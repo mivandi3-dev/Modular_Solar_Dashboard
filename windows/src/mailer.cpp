@@ -125,6 +125,39 @@ MailContent activation_mail(const std::string& code, const std::string& first_na
     return m;
 }
 
+MailContent password_reset_mail(const std::string& code, const std::string& first_name, const std::string& email,
+                                const std::string& plant_name, std::time_t valid_until) {
+    const std::string hello = first_name.empty() ? "Hello," : "Hello " + first_name + ",";
+    const std::string plant = plant_name.empty() ? "Solar Dashboard" : plant_name;
+    const std::string until = mail_utc_text(valid_until);
+    MailContent m;
+    m.subject = "Your Solar Dashboard password reset code";
+    const std::string inner =
+        "<p style=\"margin:0 0 14px 0\">" + html_escape(hello) + "</p>"
+        "<p style=\"margin:0 0 14px 0\">We received a request to reset the password of your account <b>" + html_escape(email) +
+        "</b> on <b>" + html_escape(plant) + "</b>. Enter this one-time code in the app to choose a new password:</p>"
+        "<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin:22px 0\"><tr><td align=\"center\" "
+        "style=\"background:#fff7ed;border:2px solid #ea580c;border-radius:14px;padding:26px 12px\">"
+        "<div style=\"font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#c2410c;margin-bottom:10px\">Password reset code</div>"
+        "<div style=\"font-family:Consolas,Menlo,monospace;font-size:40px;line-height:1.15;font-weight:700;letter-spacing:6px;color:#0f172a\">" +
+        html_escape(code) + "</div></td></tr></table>"
+        "<p style=\"margin:0 0 14px 0;text-align:center;font-size:16px\"><b>Use the code before it expires: " + html_escape(until) +
+        "</b><br><span style=\"color:#64748b;font-size:13px\">The code is valid for 30 minutes and can be used only once.</span></p>"
+        "<p style=\"margin:0 0 14px 0\"><b>How to reset your password</b><br>1. In the Solar Dashboard app, open the sign-in screen and choose "
+        "<i>Forgot password</i>.<br>2. Enter your email address, this code and your new password.<br>"
+        "3. Sign in with the new password – all previous sign-ins are signed out.</p>"
+        "<p style=\"margin:0 0 14px 0\">If you did not request this, ignore this email: your current password stays unchanged.</p>";
+    m.html = frame("en", "Your password reset code: " + code, inner,
+                   "Never share this code with anyone. Solar Dashboard staff will never ask you for it."
+                   "<br>Sent by Solar Dashboard &middot; registration@solardashboard.bid");
+    m.text = hello + "\n\nWe received a request to reset the password of your account " + email + " on " + plant +
+             ". Enter this one-time code in the app to choose a new password:\n\n    " + code +
+             "\n\nUse the code before it expires: " + until + " (valid for 30 minutes, can be used only once).\n\n"
+             "In the Solar Dashboard app choose Forgot password, enter your email address, this code and your new password.\n\n"
+             "If you did not request this, ignore this email: your current password stays unchanged.\n";
+    return m;
+}
+
 MailContent alert_mail(const std::string& subject, const std::string& body, const std::string& plant_name) {
     MailContent m;
     m.subject = subject;
@@ -224,6 +257,20 @@ std::string send_activation_mail(const Settings& s, const std::string& email, co
     }
     wipe(key);
     return tr("Jednokratni kod poslan je na {email} (vrijedi do {time}).", {{"email", email}, {"time", local_text(valid_until)}});
+}
+
+void send_password_reset_mail(const Settings& s, const std::string& email, const std::string& first_name, const std::string& code,
+                              std::time_t valid_until) {
+    std::string key = resend_key(s);
+    if (key.empty()) throw MailError(tr("Slanje e-pošte nije podešeno (Postavke → Obavijesti → API ključ servisa Resend)."));
+    NetInit net;
+    try {
+        resend_send(s, key, kMailFromRegistration, {email}, password_reset_mail(code, first_name, email, s.plant_name, valid_until), false);
+    } catch (...) {
+        wipe(key);
+        throw;
+    }
+    wipe(key);
 }
 
 }  // namespace sm

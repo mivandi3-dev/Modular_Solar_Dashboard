@@ -17,6 +17,7 @@
 
 #include "alerts.hpp"
 #include "api.hpp"
+#include "api_ipc.hpp"
 #include "config.hpp"
 #include "dashboard.hpp"
 #include "data.hpp"
@@ -666,6 +667,17 @@ TEST_CASE("HTTPS 3.0: poslužitelj s vlastitim certifikatom, prijava klijenta i 
     CHECK(login.pin == cert.fingerprint);
     CHECK(login.account["name"] == "Ana Horvat");
     CHECK(login.token.size() == 43);
+
+    // zaboravljena lozinka: isto uparivanje – bez koda e-pošta ni kod ne odlaze poslužitelju
+    const int before_forgot = secret_requests;
+    CHECK_THROWS_AS(cloud_forgot_password(url, "ana@primjer.hr", ""), CloudPairingNeeded);
+    CHECK_THROWS_AS(cloud_reset_password(url, "ana@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", ""), CloudPairingNeeded);
+    CHECK(secret_requests == before_forgot);
+    // poslužitelj bez podešene e-pošte javlja to korisniku; pogrešan kod → poruka, ne prijava
+    CHECK_THROWS_WITH_AS(cloud_forgot_password(url, "ana@primjer.hr", login.pin), doctest::Contains("slanje e-pošte"), CloudError);
+    CHECK_THROWS_WITH_AS(cloud_reset_password(url, "ana@primjer.hr", "AAAA-AAAA", "Novo-Sunce-2027!", login.pin),
+                         doctest::Contains("Kod nije točan"), CloudError);
+    CHECK_THROWS_AS(cloud_forgot_password(url, "nije-adresa", login.pin), CloudError);
 
     Settings s;
     s.cloud_url = url;
@@ -2321,4 +2333,56 @@ TEST_CASE("[device][vendor][S] Sungrow SH, Solis string i hibrid, Fox ESS, Growa
         CHECK(p.extra["grid_v"] == doctest::Approx(231.5));
         CHECK(p.extra["grid_hz"] == doctest::Approx(49.98));
     }
+}
+
+TEST_CASE("API: zaboravljena lozinka – isti odgovor za svaku adresu, kod e-poštom, nova lozinka uz kod") {
+    TempHome home;
+    Catalog catalog = load_catalog(kSource / L"web" / L"catalog.json");
+    DataService data(home.dir.path / L"solar.db");
+    WeatherService weather;
+    UserStore users(home.dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
+    users.create(person("admin@primjer.hr", Role::Admin), now());  // bez administratora API ne prima prijave (503)
+    users.create(person("ana@primjer.hr", Role::User), now());
+    Settings with_mail;
+    with_mail.resend_api_key_enc = protect_secret("re_TESTKEY12345_abc");
+    bool mail_on = false;
+    std::vector<ResetRequest> sent;
+    ApiContext ctx{&data, &weather, &catalog, &users, [&] { return mail_on ? with_mail : Settings{}; }};
+    ctx.send_reset = [&](const Settings&, const ResetRequest& r) { sent.push_back(r); };
+    auto handler = api_handler(ctx);
+    const auto forgot = [&](const std::string& email, const std::string& peer) {
+        return handler(api_request("/api/v1/forgot_password", "", peer, "POST", json{{"email", email}}.dump()));
+    };
+    const auto reset = [&](const std::string& code, const std::string& pw, const std::string& peer) {
+        return handler(api_request("/api/v1/reset_password", "", peer, "POST",
+                                   json{{"email", "ana@primjer.hr"}, {"code", code}, {"new_password", pw}}.dump()));
+    };
+    // bez podešene e-pošte: 503 za svaku adresu (ne otkriva račun)
+    CHECK(forgot("ana@primjer.hr", "10.0.1.1").code == 503);
+    mail_on = true;
+    CHECK(handler(api_request("/api/v1/forgot_password", "", "10.0.1.1", "GET")).code == 405);
+    const HttpResponse unknown = forgot("nitko@primjer.hr", "10.0.1.2");
+    const HttpResponse known = forgot("ana@primjer.hr", "10.0.1.3");
+    CHECK(unknown.code == 200);
+    CHECK(known.code == 200);
+    CHECK(unknown.body == known.body);  // isti odgovor
+    REQUIRE(sent.size() == 1);
+    CHECK(sent[0].email == "ana@primjer.hr");
+    // pogrešan kod, slaba lozinka, ispravno
+    CHECK(json::parse(reset("AAAA-AAAA", "Novo-Sunce-2027!", "10.0.1.4").body)["error"] == "bad_code");
+    CHECK(json::parse(reset(sent[0].code, "kratka", "10.0.1.4").body)["error"] == "password_invalid");
+    CHECK(reset(sent[0].code, "Novo-Sunce-2027!", "10.0.1.4").code == 200);
+    CHECK(handler(login_request("ana@primjer.hr", "Novo-Sunce-2027!", "10.0.1.4")).code == 200);
+    // pogađanje kodova s jedne adrese: ograničenje po adresi (10 neuspjeha → 429)
+    int blocked = 0;
+    for (int i = 0; i < 12; ++i) blocked += reset("BBBB-BBBB", "Novo-Sunce-2028!", "10.0.1.9").code == 429;
+    CHECK(blocked > 0);
+    // gateway → servis: nove rute su na popisu, ostale nisu
+    json m = {{"type", "request"}, {"route", "forgot_password"}, {"method", "POST"}, {"client_ip", "10.0.0.5"}, {"body", "{}"}};
+    REQUIRE(request_from_ipc(m));
+    CHECK(request_from_ipc(m)->path == "/api/v1/forgot_password");
+    m["route"] = "reset_password";
+    CHECK(request_from_ipc(m)->path == "/api/v1/reset_password");
+    m["route"] = "users";
+    CHECK_FALSE(request_from_ipc(m));
 }
