@@ -151,7 +151,7 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
     if (!body) return HttpResponse::json_body(400, {{"error", "bad_request"}});
     std::string password = str(*body, "password");
     const LoginResult r = users.login(str(*body, "email"), std::move(password), str(*body, "device").substr(0, kMaxDeviceLength), t,
-                                      str(*body, "totp"), str(*body, "new_password"));
+                                      str(*body, "totp"), str(*body, "new_password"), "net:" + ip);  // R-14a: izvor
     // dvofaktorska prijava: lozinka je točna, treba kod (ili postavljanje – adresa za QR kod samo tada)
     const auto totp_reply = [&](const char* error) {
         json j = {{"error", error}};
@@ -197,7 +197,8 @@ HttpResponse change_password(UserStore& users, const UserInfo& me, const HttpReq
         return HttpResponse::json_body(400, {{"error", "invalid"}, {"fields", e.fields}});
     }
     // sve prijave su poništene – ovaj uređaj dobiva novu oznaku
-    const LoginResult r = users.login(me.email, new_pw, str(*body, "device").substr(0, kMaxDeviceLength), t, str(*body, "totp"));
+    const LoginResult r = users.login(me.email, new_pw, str(*body, "device").substr(0, kMaxDeviceLength), t, str(*body, "totp"), {},
+                                      "net:" + ip);
     if (r.status != LoginResult::Status::Ok) return HttpResponse::json_body(200, {{"token", nullptr}, {"login_again", true}});
     return HttpResponse::json_body(200, {{"token", r.token}});
 }

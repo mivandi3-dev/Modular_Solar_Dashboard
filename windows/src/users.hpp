@@ -16,6 +16,7 @@
 #pragma once
 
 #include <ctime>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -33,10 +34,18 @@ inline constexpr uint32_t kPasswordIterations = 600'000;
 // Jednokratni aktivacijski kod (4.0, SMA-03): slučajan za svakog korisnika, vrijedi 72 sata
 inline constexpr size_t kActivationCodeChars = 12;  // base32 → 60 bita
 inline constexpr std::time_t kActivationSeconds = 72 * 3600;
-inline constexpr int kUsersSchemaVersion = 1;       // 4.0; baza bez verzije (3.x) se odbija bez izmjene
+inline constexpr int kUsersSchemaVersion = 2;  // 4.0; 2 = R-14a (login_failures); 1 se nadogradi; bez verzije (3.x) se odbija
 inline constexpr size_t kMinPasswordLength = 10;
+// 4.0 (SMA-14, R-14a): zaključavanje po paru (račun, izvor) – 5 pogrešnih s istog izvora zaključava samo taj izvor 15 min.
+// Izvor = rate_limit_key adrese klijenta (IPv6 po /64, iza tunela CF-Connecting-IP) ili "local" (prozor poslužitelja).
 inline constexpr int kMaxFailedLogins = 5;
 inline constexpr std::time_t kLockSeconds = 15 * 60;
+inline constexpr const char* kLoginSourceLocal = "local";
+// Raspodijeljeni napad: više od 50 neuspjeha u 24 h na jedan račun → udaljeni izvori najviše 1 pokušaj u minuti
+// (lokalni prozor je izuzet, račun se ne zaključava), a administrator dobiva upozorenje (set_alert_handler)
+inline constexpr int kAccountSoftLimit = 50;
+inline constexpr std::time_t kAccountWindowSeconds = 24 * 3600;
+inline constexpr std::time_t kThrottleSeconds = 60;
 inline constexpr std::time_t kSessionIdleSeconds = 30 * 24 * 3600;
 inline constexpr std::time_t kSessionMaxSeconds = 90 * 24 * 3600;
 
@@ -111,7 +120,10 @@ public:
 
     LoginResult login(const std::string& email, std::string password, const std::string& device, std::time_t now,
                       const std::string& totp = {},           // kod iz aplikacije autentifikatora ili kod za oporavak
-                      std::string new_password = {});         // vlastita lozinka pri aktivaciji
+                      std::string new_password = {},          // vlastita lozinka pri aktivaciji
+                      const std::string& source = kLoginSourceLocal);  // R-14a: izvor pokušaja
+    // R-14a: poziva se jednom po razdoblju kad račun prijeđe kAccountSoftLimit neuspjeha u 24 h (npr. e-poruka administratoru)
+    void set_alert_handler(std::function<void(const std::string& message)> handler) { alert_ = std::move(handler); }
     std::string issue_activation_code(int64_t id, std::time_t now);  // administrator: novi kod (stara lozinka i prijave prestaju)
     void revoke_all_sessions(int64_t id);                          // administrator: „Odjavi sve uređaje”
     void reset_totp(int64_t id, std::time_t now);     // izgubljen mobitel: ponovno postavljanje pri sljedećoj prijavi
@@ -135,11 +147,21 @@ private:
     void revoke_sessions(int64_t id);
     bool second_factor(const Row& r, const std::string& code, std::time_t now, LoginResult& res);
     void count_failure(const Row& r, std::time_t now, LoginResult& res, LoginResult::Status status);
+    struct SourceState {
+        int failed = 0;
+        std::time_t locked_until = 0, last_attempt = 0;
+    };
+    SourceState source_state(int64_t id, const std::string& source);
+    void touch_source(int64_t id, const std::string& source, std::time_t now);
+    bool account_throttled(int64_t id, std::time_t now);
+    void clear_failures(int64_t id);
     void migrate();
     int admins_enabled(std::optional<int64_t> except);
 
     std::recursive_mutex mu_;  // API, prozor poslužitelja i radna nit dijele spremište
     sqlite3* db_ = nullptr;
+    std::string source_ = kLoginSourceLocal;  // izvor prijave u tijeku (pod mu_)
+    std::function<void(const std::string&)> alert_;
     UserKeys keys_;
     uint32_t iterations_;
 };

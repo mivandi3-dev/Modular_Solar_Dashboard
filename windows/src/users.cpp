@@ -27,7 +27,11 @@ constexpr const char* kSchema =
     " last_login INTEGER NOT NULL DEFAULT 0);"
     "CREATE TABLE IF NOT EXISTS sessions (token_hash BLOB PRIMARY KEY, user_id INTEGER NOT NULL, device_enc BLOB,"
     " created INTEGER NOT NULL, last_used INTEGER NOT NULL);"
-    "CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);";
+    "CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);"
+    // 4.0 (R-14a): neuspjesi i zaključavanje po paru (račun, izvor)
+    "CREATE TABLE IF NOT EXISTS login_failures (user_id INTEGER NOT NULL, source TEXT NOT NULL,"
+    " failed INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0, last_attempt INTEGER NOT NULL DEFAULT 0,"
+    " PRIMARY KEY (user_id, source));";
 
 constexpr size_t kSaltBytes = 16, kHashBytes = 32, kTokenBytes = 32;
 constexpr std::time_t kTouchSeconds = 60;  // last_used se ne zapisuje češće (manje pisanja)
@@ -239,6 +243,15 @@ UserStore::UserStore(const fs::path& db_path, UserKeys keys, uint32_t iterations
         Stmt ins(db_, "INSERT INTO schema_version (version) VALUES (?)");
         ins.bind(1, static_cast<int64_t>(kUsersSchemaVersion));
         ins.step();
+    } else {  // 1 → 2 (R-14a): tablica i stupci su dodani u kSchema/migrate(), stari brojač računa se poništava
+        Stmt old(db_, "SELECT MAX(version) FROM schema_version");
+        if (old.step() && old.i64(0) < kUsersSchemaVersion) {
+            exec(db_, "UPDATE users SET failed = 0, locked_until = 0");
+            Stmt up(db_, "UPDATE schema_version SET version = ?");
+            up.bind(1, static_cast<int64_t>(kUsersSchemaVersion));
+            up.step();
+            log_info("Korisnici: baza nadograđena na shemu " + std::to_string(kUsersSchemaVersion) + " (zaključavanje po izvoru)");
+        }
     }
 }
 
@@ -252,7 +265,10 @@ void UserStore::migrate() {
     const std::pair<const char*, const char*> columns[] = {
         {"totp_required", "INTEGER NOT NULL DEFAULT 0"}, {"totp_secret_enc", "BLOB"}, {"totp_pending_enc", "BLOB"},
         {"totp_last_step", "INTEGER NOT NULL DEFAULT 0"}, {"recovery", "TEXT"},
-        {"must_change", "INTEGER NOT NULL DEFAULT 0"}, {"default_set_at", "INTEGER NOT NULL DEFAULT 0"}};
+        {"must_change", "INTEGER NOT NULL DEFAULT 0"}, {"default_set_at", "INTEGER NOT NULL DEFAULT 0"},
+        // 4.0 (R-14a): neuspjesi računa sa svih izvora u razdoblju od 24 h (usporavanje i upozorenje)
+        {"acct_window", "INTEGER NOT NULL DEFAULT 0"}, {"acct_failed", "INTEGER NOT NULL DEFAULT 0"},
+        {"acct_alerted", "INTEGER NOT NULL DEFAULT 0"}};
     for (const auto& [name, type] : columns) {
         if (!have.count(name)) exec(db_, ("ALTER TABLE users ADD COLUMN " + std::string(name) + " " + type).c_str());
     }
@@ -285,6 +301,11 @@ UserInfo UserStore::info(const Row& r) {
     u.created = r.created;
     u.last_login = r.last_login;
     u.locked_until = r.locked_until;
+    {  // R-14a: najkasnije zaključavanje bilo kojeg izvora (prikaz administratoru)
+        Stmt q(db_, "SELECT MAX(locked_until) FROM login_failures WHERE user_id = ?");
+        q.bind(1, r.id);
+        if (q.step()) u.locked_until = std::max<std::time_t>(u.locked_until, q.i64(0));
+    }
     u.totp_required = r.totp_required;
     u.totp_enabled = r.totp_required && !r.totp_secret_enc.empty();
     const json codes = json::parse(r.recovery.empty() ? "[]" : r.recovery, nullptr, false);
@@ -344,6 +365,7 @@ void UserStore::set_password_hash(int64_t id, const std::string& password, std::
                 " default_set_at = ? WHERE id = ?");
     q.bind(1, salt).bind(2, hash).bind(3, static_cast<int64_t>(iterations_)).bind(4, static_cast<int64_t>(now))
         .bind(5, static_cast<int64_t>(must_change ? 1 : 0)).bind(6, static_cast<int64_t>(must_change ? now : 0)).bind(7, id);
+    clear_failures(id);  // nova lozinka ili kod: sva zaključavanja tog računa prestaju
     q.step();
     wipe(hash);
     revoke_sessions(id);  // nova lozinka = sve postojeće prijave prestaju vrijediti
@@ -433,6 +455,7 @@ void UserStore::set_disabled(int64_t id, bool disabled, std::time_t now) {
     Stmt q(db_, "UPDATE users SET disabled = ?, failed = 0, locked_until = 0, updated = ? WHERE id = ?");
     q.bind(1, static_cast<int64_t>(disabled ? 1 : 0)).bind(2, static_cast<int64_t>(now)).bind(3, id);
     q.step();
+    clear_failures(id);  // blokiranje/odblokiranje otključava račun (ublaženje SMA-14)
     if (disabled) revoke_sessions(id);
 }
 
@@ -444,6 +467,7 @@ void UserStore::remove(int64_t id) {
         throw UserError({{"general", tr("Mora ostati barem jedan aktivni administrator.")}});
     }
     revoke_sessions(id);
+    clear_failures(id);
     Stmt q(db_, "DELETE FROM users WHERE id = ?");
     q.bind(1, id);
     q.step();
@@ -467,9 +491,10 @@ std::optional<UserInfo> UserStore::get(int64_t id) {
 }
 
 LoginResult UserStore::login(const std::string& email, std::string password, const std::string& device, std::time_t now,
-                             const std::string& totp, std::string new_password) {
+                             const std::string& totp, std::string new_password, const std::string& source) {
     std::lock_guard lock(mu_);
     LoginResult res;
+    source_ = source.empty() ? std::string(kLoginSourceLocal) : source.substr(0, 64);
     const auto row = password.size() <= kMaxPasswordLength ? row_by_email(email) : std::nullopt;
     if (!row) {
         // nepoznata e-pošta: isti rad kao provjera lozinke, da se po vremenu ne može doznati postoji li račun
@@ -481,7 +506,15 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
     // aktivacijski kod se uspoređuje bez crtica i razmaka, velikim slovima
     const bool good = verify_password(*row, row->must_change ? normalize_activation_code(password) : password);
     wipe(password);
-    if (row->locked_until > now) {  // zaključan: uz pogrešnu lozinku isto kao nepostojeći račun (SMA-13)
+    // R-14a: zaključan je samo ovaj izvor za ovaj račun; uz pogrešnu lozinku isto kao nepostojeći račun (SMA-13)
+    const SourceState src = source_state(row->id, source_);
+    if (src.locked_until > now) {
+        res.status = good ? LoginResult::Status::Locked : LoginResult::Status::BadCredentials;
+        return res;
+    }
+    // R-14a: raspodijeljeni napad na račun – udaljeni izvor smije najviše jedan pokušaj u minuti (lokalni prozor izuzet)
+    if (source_ != kLoginSourceLocal && account_throttled(row->id, now) && now - src.last_attempt < kThrottleSeconds) {
+        touch_source(row->id, source_, now);
         res.status = good ? LoginResult::Status::Locked : LoginResult::Status::BadCredentials;
         return res;
     }
@@ -528,18 +561,94 @@ LoginResult UserStore::login(const std::string& email, std::string password, con
     Stmt u(db_, "UPDATE users SET failed = 0, locked_until = 0, last_login = ? WHERE id = ?");
     u.bind(1, static_cast<int64_t>(now)).bind(2, row->id);
     u.step();
+    // uspjeh s ovog izvora: brojač i zaključavanje na 0, vrijeme pokušaja ostaje (usporavanje vrijedi i za uspješne pokušaje)
+    Stmt f(db_, "INSERT INTO login_failures (user_id, source, failed, locked_until, last_attempt) VALUES (?, ?, 0, 0, ?)"
+                " ON CONFLICT(user_id, source) DO UPDATE SET failed = 0, locked_until = 0, last_attempt = excluded.last_attempt");
+    f.bind(1, row->id).bind(2, source_).bind(3, static_cast<int64_t>(now));
+    f.step();
     res.status = LoginResult::Status::Ok;
     res.user = info(*row_by_id(row->id));  // nakon postavljanja dvofaktorske prijave podaci su novi
     res.user->last_login = now;
     return res;
 }
 
-void UserStore::count_failure(const Row& r, std::time_t now, LoginResult& res, LoginResult::Status status) {
-    const int failed = r.failed + 1;
-    const std::time_t until = failed >= kMaxFailedLogins ? now + kLockSeconds : 0;
-    Stmt q(db_, "UPDATE users SET failed = ?, locked_until = ? WHERE id = ?");
-    q.bind(1, static_cast<int64_t>(until ? 0 : failed)).bind(2, static_cast<int64_t>(until)).bind(3, r.id);
+UserStore::SourceState UserStore::source_state(int64_t id, const std::string& source) {
+    SourceState s;
+    Stmt q(db_, "SELECT failed, locked_until, last_attempt FROM login_failures WHERE user_id = ? AND source = ?");
+    q.bind(1, id).bind(2, source);
+    if (q.step()) {
+        s.failed = static_cast<int>(q.i64(0));
+        s.locked_until = q.i64(1);
+        s.last_attempt = q.i64(2);
+    }
+    return s;
+}
+
+void UserStore::touch_source(int64_t id, const std::string& source, std::time_t now) {
+    Stmt q(db_, "INSERT INTO login_failures (user_id, source, last_attempt) VALUES (?, ?, ?)"
+                " ON CONFLICT(user_id, source) DO UPDATE SET last_attempt = excluded.last_attempt");
+    q.bind(1, id).bind(2, source).bind(3, static_cast<int64_t>(now));
     q.step();
+}
+
+bool UserStore::account_throttled(int64_t id, std::time_t now) {
+    Stmt q(db_, "SELECT acct_window, acct_failed FROM users WHERE id = ?");
+    q.bind(1, id);
+    return q.step() && now - q.i64(0) <= kAccountWindowSeconds && q.i64(1) > kAccountSoftLimit;
+}
+
+void UserStore::clear_failures(int64_t id) {
+    Stmt d(db_, "DELETE FROM login_failures WHERE user_id = ?");
+    d.bind(1, id);
+    d.step();
+    Stmt u(db_, "UPDATE users SET acct_window = 0, acct_failed = 0, acct_alerted = 0 WHERE id = ?");
+    u.bind(1, id);
+    u.step();
+}
+
+void UserStore::count_failure(const Row& r, std::time_t now, LoginResult& res, LoginResult::Status status) {
+    // R-14a: brojač i zaključavanje po paru (račun, izvor)
+    const SourceState st = source_state(r.id, source_);
+    const int failed = st.failed + 1;
+    const std::time_t until = failed >= kMaxFailedLogins ? now + kLockSeconds : 0;
+    Stmt q(db_, "INSERT INTO login_failures (user_id, source, failed, locked_until, last_attempt) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(user_id, source) DO UPDATE SET failed = excluded.failed, locked_until = excluded.locked_until,"
+                " last_attempt = excluded.last_attempt");
+    q.bind(1, r.id).bind(2, source_).bind(3, static_cast<int64_t>(until ? 0 : failed)).bind(4, static_cast<int64_t>(until))
+        .bind(5, static_cast<int64_t>(now));
+    q.step();
+    if (until) log_warn("Korisnici: račun #" + std::to_string(r.id) + " zaključan 15 min za izvor " + source_);
+    // brojač računa sa svih izvora (razdoblje 24 h): usporavanje udaljenih izvora i jedno upozorenje po razdoblju
+    Stmt a(db_, "SELECT acct_window, acct_failed, acct_alerted FROM users WHERE id = ?");
+    a.bind(1, r.id);
+    int64_t window = 0, count = 0, alerted = 0;
+    if (a.step()) {
+        window = a.i64(0);
+        count = a.i64(1);
+        alerted = a.i64(2);
+    }
+    if (now - window > kAccountWindowSeconds) {
+        window = now;
+        count = 0;
+        alerted = 0;
+    }
+    ++count;
+    const bool alert = count > kAccountSoftLimit && !alerted;
+    Stmt w(db_, "UPDATE users SET acct_window = ?, acct_failed = ?, acct_alerted = ? WHERE id = ?");
+    w.bind(1, window).bind(2, count).bind(3, static_cast<int64_t>(alerted || alert ? 1 : 0)).bind(4, r.id);
+    w.step();
+    if (alert) {
+        const std::string msg = "Račun #" + std::to_string(r.id) + ": više od " + std::to_string(kAccountSoftLimit) +
+                                " neuspjelih prijava u 24 h s više adresa – prijave s mreže su usporene (1 pokušaj u minuti po adresi).";
+        log_warn("Korisnici: " + msg);
+        if (alert_) {
+            try {
+                alert_(msg);
+            } catch (const std::exception& e) {
+                log_error(std::string("Korisnici: upozorenje nije poslano: ") + e.what());
+            }
+        }
+    }
     // uz pogrešnu lozinku zaključavanje se ne javlja (SMA-13, SMA-26); uz točnu lozinku i pogrešan kod (TOTP) smije
     res.status = until && status != LoginResult::Status::BadCredentials ? LoginResult::Status::Locked : status;
 }

@@ -15,7 +15,10 @@
 #include "ipc.hpp"
 #include "secret.hpp"
 #include "storage.hpp"
+#include "users.hpp"
 #include "util.hpp"
+
+#include <sqlite3.h>
 
 using namespace sm;
 
@@ -645,4 +648,104 @@ TEST_CASE("NEW-05: sučelje ne piše ni ne briše kroz spojnicu u ui\\ (zajedni�
     CHECK(ui_write_allowed(fs::temp_directory_path()));  // izvan mape podataka (testovi) se ne provjerava
     std::error_code ec;
     fs::remove(images_dir(), ec);  // uklanja samo spojnicu
+}
+
+// ================================================================ SMA-14 / R-14a: zaključavanje po paru (račun, izvor)
+namespace {
+constexpr uint32_t kFastIterations = 1000;
+constexpr const char* kPw = "Sunce-2026-ploce";
+using St = LoginResult::Status;
+}  // namespace
+
+TEST_CASE("R-14a: napad s jedne adrese zaključava samo tu adresu – druge adrese i lokalni prozor rade") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    users.create({"Ana", "Admin", "admin@primjer.hr", kPw, Role::Admin}, 1000);
+    std::time_t t = 1'800'000'000;
+    for (int i = 0; i < kMaxFailedLogins; ++i) CHECK(users.login("admin@primjer.hr", "kriva", "x", t, {}, {}, "net:203.0.113.7").status == St::BadCredentials);
+    // napadačeva adresa: zaključana (uz točnu lozinku 423, uz pogrešnu isti odgovor kao nepostojeći račun – SMA-13)
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:203.0.113.7").status == St::Locked);
+    CHECK(users.login("admin@primjer.hr", "kriva", "x", t, {}, {}, "net:203.0.113.7").status == St::BadCredentials);
+    // druga adresa i lokalni prozor poslužitelja: normalna prijava
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:198.51.100.4").status == St::Ok);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t).status == St::Ok);  // zadano: "local"
+    // pogađanje s jedne adrese ostaje ograničeno: 5 pokušaja, zatim 15 min ništa (ni ispravna lozinka)
+    t += kLockSeconds - 1;
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:203.0.113.7").status == St::Locked);
+    t += 2;
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:203.0.113.7").status == St::Ok);
+    // napad na lokalni izvor ne zaključava mrežu (i obrnuto)
+    for (int i = 0; i < kMaxFailedLogins; ++i) users.login("admin@primjer.hr", "kriva", "x", t);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t).status == St::Locked);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:198.51.100.4").status == St::Ok);
+}
+
+TEST_CASE("R-14a: raspodijeljeni napad usporava udaljene prijave, upozorava jednom, lokalni prozor je izuzet") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    const int64_t id = users.create({"Ana", "Admin", "admin@primjer.hr", kPw, Role::Admin}, 1000);
+    std::vector<std::string> alerts;
+    users.set_alert_handler([&](const std::string& m) { alerts.push_back(m); });
+    std::time_t t = 1'800'000'000;
+    for (int i = 0; i <= kAccountSoftLimit + 9; ++i) {  // 60 adresa × 1 pogrešna lozinka
+        users.login("admin@primjer.hr", "kriva", "x", t, {}, {}, "net:10.0." + std::to_string(i / 250) + "." + std::to_string(i % 250));
+    }
+    CHECK(alerts.size() == 1);  // jedno upozorenje po razdoblju od 24 h
+    CHECK(users.get(id)->locked_until == 0);  // račun nije zaključan
+    // nova adresa: prvi pokušaj smije (ispravna lozinka prolazi), drugi unutar minute ne
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:192.0.2.1").status == St::Ok);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 10, {}, {}, "net:192.0.2.1").status == St::Locked);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 10 + kThrottleSeconds, {}, {}, "net:192.0.2.1").status == St::Ok);
+    // lokalni prozor poslužitelja nije usporen
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 11).status == St::Ok);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 12).status == St::Ok);
+    // nakon 24 h bez novih neuspjeha usporavanje prestaje
+    t += kAccountWindowSeconds + 1;
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t, {}, {}, "net:192.0.2.9").status == St::Ok);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", t + 1, {}, {}, "net:192.0.2.9").status == St::Ok);
+}
+
+TEST_CASE("R-14a: administrator otključava (blokiraj/odblokiraj, novi aktivacijski kod) sve izvore") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    users.create({"Ana", "Admin", "admin@primjer.hr", kPw, Role::Admin}, 1000);
+    const int64_t uid = users.create({"Iva", "Korisnik", "iva@primjer.hr", kPw, Role::User}, 1000);
+    std::time_t t = 1'800'000'000;
+    for (int i = 0; i < kMaxFailedLogins; ++i) users.login("iva@primjer.hr", "kriva", "x", t, {}, {}, "net:203.0.113.7");
+    CHECK(users.get(uid)->locked_until > t);  // prikaz administratoru
+    users.set_disabled(uid, true, t);
+    users.set_disabled(uid, false, t);
+    CHECK(users.get(uid)->locked_until == 0);
+    CHECK(users.login("iva@primjer.hr", kPw, "x", t, {}, {}, "net:203.0.113.7").status == St::Ok);
+}
+
+TEST_CASE("R-14a: shema 1 → 2 nadogradi se na mjestu, prijave i korisnici ostaju") {
+    TmpDir dir;
+    const fs::path db = dir.path / L"users.db";
+    const UserKeys keys{random_bytes(32), random_bytes(32)};
+    {
+        UserStore users(db, keys, kFastIterations);
+        users.create({"Ana", "Admin", "admin@primjer.hr", kPw, Role::Admin}, 1000);
+    }
+    {  // vrati na shemu 1 (kao baza iz prethodne runde 4.0.0): bez tablice login_failures i novih stupaca nije moguće
+       // ukloniti stupce, pa se simulira verzija 1 i nepostojeća tablica
+        sqlite3* h = nullptr;
+        REQUIRE(sqlite3_open(narrow(db.wstring()).c_str(), &h) == SQLITE_OK);
+        REQUIRE(sqlite3_exec(h, "DROP TABLE login_failures; UPDATE schema_version SET version = 1;", nullptr, nullptr, nullptr) == SQLITE_OK);
+        sqlite3_close(h);
+    }
+    UserStore users(db, keys, kFastIterations);
+    CHECK(users.login("admin@primjer.hr", kPw, "x", 1'800'000'000, {}, {}, "net:198.51.100.4").status == St::Ok);
+    sqlite3* h = nullptr;
+    REQUIRE(sqlite3_open(narrow(db.wstring()).c_str(), &h) == SQLITE_OK);
+    sqlite3_stmt* st = nullptr;
+    REQUIRE(sqlite3_prepare_v2(h, "SELECT version FROM schema_version", -1, &st, nullptr) == SQLITE_OK);
+    REQUIRE(sqlite3_step(st) == SQLITE_ROW);
+    CHECK(sqlite3_column_int(st, 0) == kUsersSchemaVersion);
+    sqlite3_finalize(st);
+    REQUIRE(sqlite3_prepare_v2(h, "SELECT COUNT(*) FROM sqlite_master WHERE name = 'login_failures'", -1, &st, nullptr) == SQLITE_OK);
+    REQUIRE(sqlite3_step(st) == SQLITE_ROW);
+    CHECK(sqlite3_column_int(st, 0) == 1);
+    sqlite3_finalize(st);
+    sqlite3_close(h);
 }

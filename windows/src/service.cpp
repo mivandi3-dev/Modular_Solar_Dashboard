@@ -8,6 +8,9 @@
 #include <memory>
 #include <mutex>
 #include <regex>
+#include <thread>
+
+#include "alerts.hpp"
 
 #include "api.hpp"
 #include "api_ipc.hpp"
@@ -58,6 +61,22 @@ int run_server_service() {
     WeatherService weather;
     std::mutex settings_mutex;
     Settings settings = load_settings();
+    // R-14a (SMA-14): raspodijeljeni napad na račun → e-poruka administratoru (adrese obavijesti), u zasebnoj niti
+    users->set_alert_handler([&settings_mutex, &settings](const std::string& message) {
+        Settings s;
+        {
+            std::lock_guard lock(settings_mutex);
+            s = settings;
+        }
+        if (s.alert_emails.empty() || s.smtp_host.empty()) return;
+        std::thread([s, message] {
+            try {
+                send_mail(s, "Solarni poslužitelj: sumnjive prijave", message);
+            } catch (const std::exception& e) {
+                log_error(std::string("Upozorenje o prijavama nije poslano: ") + e.what());
+            }
+        }).detach();
+    });
     set_language(settings.language);
     std::time_t stamp = config_stamp();
 
