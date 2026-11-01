@@ -207,6 +207,9 @@
       // prije prvih podataka: razlog umjesto "Pokrećem dashboard…" (pokušava se ponovno)
       const loading = !booted && document.querySelector(".loading");
       if (loading) loading.textContent = `${T("Poslužitelj ne odgovara.")} ${e && e.message ? e.message : e}`;
+      // 5.0.1: i bez podataka prečaci moraju raditi (F2 postavke / prijava, F11 i Alt+Enter, Esc) – inače korisnik ostaje
+      // zarobljen na poruci preko cijelog zaslona
+      if (!booted && !remote) loadScripts(["overlay.js"]);
     }
     const seconds = Math.min(60, Math.max(5, (data && data.settings.poll_interval_s) || 10));
     timer = setTimeout(refresh, seconds * 1000);
@@ -224,6 +227,18 @@
     document.querySelector(".loading").textContent = T("Pokrećem dashboard…");
   }
 
+  // Svaka skripta samo jednom (overlay.js se može učitati već uz poruku o grešci – dvostruki prečaci bi se poništavali)
+  const loadedScripts = new Set();
+  function loadScripts(list) {
+    for (const src of list) {
+      if (loadedScripts.has(src)) continue;
+      loadedScripts.add(src);
+      const el = document.createElement("script");
+      el.src = src;
+      document.body.appendChild(el);
+    }
+  }
+
   // Prečaci (overlay.js) i editor widgeta (editor.js) učitavaju se nakon prvih podataka.
   function boot() {
     booted = true;
@@ -233,11 +248,7 @@
     window.SOLARI_OPTIONS = { hideIdleCursor: s.hide_idle_cursor, version: data.version, fullscreen: data.fullscreen,
       night: { mode: s.night_mode, from: s.night_from, to: s.night_to } };
     // Android: umjesto editora rasporeda (mreža 12 × 5) ima svoj izbornik i popis widgeta (android-menu.js)
-    for (const src of window.SOLARI_ANDROID ? ["overlay.js", "android-menu.js"] : ["overlay.js", "editor.js", "window.js"]) {
-      const s = document.createElement("script");
-      s.src = src;
-      document.body.appendChild(s);
-    }
+    loadScripts(window.SOLARI_ANDROID ? ["overlay.js", "android-menu.js"] : ["overlay.js", "editor.js", "window.js"]);
   }
 
   window.solariRender = refresh;               // editor: odmah iscrtaj novi raspored

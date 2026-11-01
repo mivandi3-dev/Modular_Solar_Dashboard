@@ -15,7 +15,7 @@ SP = Path(__file__).parent
 sys.path.insert(0, str(SP))
 import cdp  # noqa: E402
 
-APP = Path(r"C:\Program Files\Solarni monitor 2\SolarniMonitor.exe")
+APP = Path(r"C:\Program Files\Solarni monitor\SolarniMonitor.exe")
 OUT = Path(r"C:\Modularnisolarnidashboard40\reports")
 results = []
 
@@ -37,7 +37,10 @@ async def key_alt_enter(ws_url):
 
 
 def main():
-    if not APP.exists():
+    app_arg = Path(sys.argv[1]) if len(sys.argv) > 1 else None  # npr. razvojna gradnja (s vlastitim SOLARI2_HOME)
+    if app_arg:
+        app = app_arg
+    elif not APP.exists():
         apps = list(Path(r"C:\Program Files").glob(r"Solarni monitor*\SolarniMonitor.exe"))
         if not apps:
             check("instalirani klijent postoji", False, "nema SolarniMonitor.exe u Program Files")
@@ -53,13 +56,16 @@ def main():
         ok = False
         for _ in range(30):
             state = cdp.js(main_t, "JSON.stringify({hero: !!document.querySelector('.hero'), cards: document.querySelectorAll('.card, .glass').length,"
-                                   " text: (document.body.innerText || '').length})")
+                                   " text: (document.body.innerText || '').trim().length, msg: (document.body.innerText || '').trim().slice(0, 120),"
+                                   " overlay: [...document.scripts].some(s => s.src.endsWith('overlay.js'))})")
             info = json.loads(state) if isinstance(state, str) else {}
-            if info.get("cards", 0) > 0 and info.get("text", 0) > 50:
+            # iscrtano = dashboard ILI poruka (npr. prijava na poslužitelj) – ne prazan prozor; prečaci učitani
+            if info.get("text", 0) > 20 and info.get("overlay"):
                 ok = True
                 break
             time.sleep(1)
-        check("dashboard je iscrtan (kartice i tekst, nije prazan prozor)", ok, state)
+        check("prozor je iscrtan (dashboard ili poruka, nije prazan) i prečaci su učitani", ok, state)
+        print("   sadržaj:", state, flush=True)
         (OUT / "screenshots").mkdir(parents=True, exist_ok=True)
         asyncio.run(cdp._capture(main_t["webSocketDebuggerUrl"], OUT / "screenshots" / "installed-gui.png"))
         before = cdp.js(main_t, "window.pywebview.api.window_state().then(s => JSON.stringify(s))")
@@ -70,8 +76,9 @@ def main():
         time.sleep(1.5)
         back = cdp.js(main_t, "window.pywebview.api.window_state().then(s => JSON.stringify(s))")
         fs = lambda s: json.loads(s).get("fullscreen") if isinstance(s, str) and s.startswith("{") else None  # noqa: E731
-        check("Alt+Enter uključuje cijeli zaslon", fs(before) is False and fs(after) is True, f"{before} → {after}")
-        check("Alt+Enter isključuje cijeli zaslon", fs(back) is False, back)
+        check("Alt+Enter mijenja cijeli zaslon (uključeno ↔ isključeno)", fs(before) is not None and fs(after) == (not fs(before)),
+              f"{before} → {after}")
+        check("drugi Alt+Enter vraća prethodno stanje", fs(back) == fs(before), f"{before} → {back}")
     except Exception as e:  # noqa: BLE001
         check("dim-test bez iznimke", False, repr(e))
     finally:
