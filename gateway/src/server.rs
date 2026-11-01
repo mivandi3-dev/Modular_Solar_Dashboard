@@ -11,6 +11,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::Request;
 use hyper_util::rt::{TokioIo, TokioTimer};
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -98,14 +99,14 @@ pub fn tls_acceptor(id: &crate::tlscert::Identity) -> std::io::Result<TlsAccepto
     Ok(TlsAcceptor::from(Arc::new(cfg)))
 }
 
-async fn serve_http<I, U>(io: I, peer: SocketAddr, upstream: Arc<U>, limits: Limits)
+async fn serve_http<I, U>(io: I, peer: SocketAddr, plain_http: bool, upstream: Arc<U>, limits: Limits)
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     U: Upstream,
 {
     let svc = service_fn(move |req: Request<Incoming>| {
         let up = upstream.clone();
-        async move { Ok::<_, Infallible>(http::handle(req, peer, &*up).await) }
+        async move { Ok::<_, Infallible>(http::handle_transport(req, peer, plain_http, &*up).await) }
     });
     let mut b = http1::Builder::new();
     b.timer(TokioTimer::new()).header_read_timeout(limits.header_timeout).keep_alive(false).max_buf_size(8 * 1024).max_headers(100);
@@ -121,10 +122,10 @@ async fn serve_connection<U: Upstream>(stream: TcpStream, peer: SocketAddr, tls:
     }
     if first[0] == 0x16 {
         if let Ok(tls_stream) = tls.accept(stream).await {
-            serve_http(tls_stream, peer, upstream, limits).await;
+            serve_http(tls_stream, peer, false, upstream, limits).await;
         }
     } else if peer.ip().is_loopback() || matches!(peer.ip(), IpAddr::V6(v6) if v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())) {
-        serve_http(stream, peer, upstream, limits).await; // cloudflared → http://127.0.0.1:port
+        serve_http(stream, peer, true, upstream, limits).await; // cloudflared → http://127.0.0.1:port
     }
     // obični HTTP iz mreže: veza se zatvara bez odgovora (u mreži samo HTTPS)
 }
@@ -160,19 +161,57 @@ pub fn bind(cfg: ListenConfig) -> std::io::Result<TcpListener> {
     socket.listen(1024)
 }
 
+fn load_listen(state: Option<&Path>) -> ListenConfig {
+    let default = ListenConfig { port: 8700, lan: false };
+    let Some(path) = state else { return default };
+    let Ok(text) = std::fs::read_to_string(path) else { return default };
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    match (v["port"].as_u64().and_then(|p| u16::try_from(p).ok()), v["lan"].as_bool()) {
+        (Some(port), Some(lan)) if port > 0 => ListenConfig { port, lan },
+        _ => default,
+    }
+}
+
+fn save_listen(state: Option<&Path>, cfg: ListenConfig) {
+    if let Some(path) = state {
+        let _ = std::fs::write(path, serde_json::json!({"port": cfg.port, "lan": cfg.lan}).to_string());
+    }
+}
+
 /// Upravljanje portom prema postavkama poslužitelja (provjera svakih 5 s preko kanala).
-pub async fn run(backend: Arc<Backend>, tls: TlsAcceptor, limits: Limits) {
+/// 5.0.1 (audit G-01): port se veže ODMAH pri pokretanju (zadnja poznata konfiguracija iz `state`, inače 127.0.0.1:8700) i
+/// drži se i kad servis ne odgovara – lokalni proces ga ne može preuzeti i primati promet tunela; novi port se veže prije
+/// zatvaranja starog (kad se port ne mijenja, samo kratka zamjena istog porta).
+pub async fn run(backend: Arc<Backend>, tls: TlsAcceptor, limits: Limits, state: Option<PathBuf>) {
     let tracker = Arc::new(Tracker::default());
     let mut current: Option<(ListenConfig, JoinHandle<()>)> = None;
     let mut last_error = String::new();
+    let initial = load_listen(state.as_deref());
+    match bind(initial) {
+        Ok(listener) => {
+            log::info(&format!("Port {} zauzet odmah pri pokretanju (zadnja poznata postavka)", initial.port));
+            let h = tokio::spawn(accept_loop(listener, tls.clone(), backend.clone(), limits, tracker.clone()));
+            current = Some((initial, h));
+        }
+        Err(e) => log::error(&format!("Port {} se ne može otvoriti pri pokretanju (zauzeo ga je drugi proces?): {e}", initial.port)),
+    }
     loop {
         match backend.config().await {
             Ok(cfg) if current.as_ref().map(|c| c.0) != Some(cfg) => {
-                if let Some((_, h)) = current.take() {
-                    h.abort();
+                // drugi port: prvo novi, pa zatvori stari; isti port (promjena LAN-a): zatvori pa odmah veži
+                let same_port = current.as_ref().is_some_and(|c| c.0.port == cfg.port);
+                if same_port {
+                    if let Some((_, h)) = current.take() {
+                        h.abort();
+                        let _ = h.await;
+                    }
                 }
                 match bind(cfg) {
                     Ok(listener) => {
+                        if let Some((_, h)) = current.take() {
+                            h.abort();
+                        }
+                        save_listen(state.as_deref(), cfg);
                         log::info(&format!(
                             "Slušam na {}:{} ({})",
                             if cfg.lan { "0.0.0.0" } else { "127.0.0.1" },

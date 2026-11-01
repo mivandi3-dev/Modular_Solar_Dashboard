@@ -56,7 +56,7 @@ async fn run(o: Options) -> std::io::Result<()> {
     }
     let tls = server::tls_acceptor(&id)?;
     let backend = Backend::new(o.pipe, o.pipe_owner, &id.fingerprint, &id.not_after);
-    server::run(backend, tls, server::Limits::default()).await;
+    server::run(backend, tls, server::Limits::default(), Some(o.data_dir.join("listen.json"))).await;
     Ok(())
 }
 

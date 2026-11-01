@@ -87,7 +87,8 @@ fn secure_headers(h: &mut hyper::HeaderMap) {
 
 /// Poruka za servis iz HTTP zahtjeva (bez tijela) ili gotov odgovor s greškom.
 #[allow(clippy::result_large_err)]
-pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr) -> Result<Value, Response<Full<Bytes>>> {
+/// `plain_http`: veza je obični HTTP (cloudflared na istom računalu); samo tada se prosljeđuje CF-Connecting-IP (audit G-02).
+pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr, plain_http: bool) -> Result<Value, Response<Full<Bytes>>> {
     let Some((route, image)) = route(req.uri().path()) else {
         return Err(error(StatusCode::NOT_FOUND, "not_found", "Nije pronađeno."));
     };
@@ -124,7 +125,7 @@ pub fn to_ipc<B>(req: &Request<B>, peer: IpAddr) -> Result<Value, Response<Full<
         msg["token"] = json!(token);
     }
     // CF-Connecting-IP samo s loopbacka (cloudflared); servis ga ionako uzima samo za 127.0.0.1 (SMA-15)
-    if ip.is_loopback() {
+    if plain_http && ip.is_loopback() {
         if let Some(cf) = h.get("cf-connecting-ip").and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse::<IpAddr>().ok()) {
             msg["cf_ip"] = json!(cf.to_string());
         }
@@ -164,13 +165,23 @@ pub fn from_ipc(resp: &Value) -> Response<Full<Bytes>> {
     r
 }
 
+/// HTTPS zahtjev (CF-Connecting-IP se ne prosljeđuje).
 pub async fn handle<B, U>(req: Request<B>, peer: SocketAddr, upstream: &U) -> Response<Full<Bytes>>
 where
     B: Body<Data = Bytes>,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     U: Upstream,
 {
-    let mut msg = match to_ipc(&req, peer.ip()) {
+    handle_transport(req, peer, false, upstream).await
+}
+
+pub async fn handle_transport<B, U>(req: Request<B>, peer: SocketAddr, plain_http: bool, upstream: &U) -> Response<Full<Bytes>>
+where
+    B: Body<Data = Bytes>,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    U: Upstream,
+{
+    let mut msg = match to_ipc(&req, peer.ip(), plain_http) {
         Ok(m) => m,
         Err(r) => return r,
     };
@@ -293,10 +304,14 @@ mod tests {
             .header("cf-connecting-ip", "203.0.113.9")
             .body(Full::new(Bytes::from(r#"{"email":"a@b.hr"}"#)))
             .unwrap();
-        handle(r, peer("127.0.0.1"), &up).await;
+        handle_transport(r, peer("127.0.0.1"), true, &up).await;  // obični HTTP s loopbacka (cloudflared)
         let sent = up.0.lock().unwrap().pop().unwrap();
         assert!(sent.get("token").is_none());
         assert_eq!(sent["cf_ip"], "203.0.113.9");
+        // HTTPS s loopbacka (lokalni proces): CF-Connecting-IP se ne prosljeđuje (audit G-02)
+        let r = req("GET", "/api/v1/ping").header("cf-connecting-ip", "203.0.113.10").body(Full::new(Bytes::new())).unwrap();
+        handle(r, peer("127.0.0.1"), &up).await;
+        assert!(up.0.lock().unwrap().pop().unwrap().get("cf_ip").is_none());
         assert_eq!(sent["body"], r#"{"email":"a@b.hr"}"#);
         // iz mreže se CF-Connecting-IP ne prosljeđuje
         let r = req("GET", "/api/v1/ping").header("cf-connecting-ip", "203.0.113.9").body(Full::new(Bytes::new())).unwrap();

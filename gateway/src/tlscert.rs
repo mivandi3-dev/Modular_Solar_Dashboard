@@ -98,10 +98,26 @@ fn load(dir: &Path) -> io::Result<Identity> {
 }
 
 /// Postojeći certifikat ili novi (ako ga nema, ključ se ne može otključati ili uskoro istječe).
+/// 5.0.1 (audit G-08): razlog se zapisuje, a postojeći ključ i certifikat čuvaju se (`*.old-<vrijeme>`) – novi otisak
+/// znači novi kod za uparivanje, pa administrator mora znati zašto se dogodio.
 pub fn load_or_create(dir: &Path) -> io::Result<(Identity, bool)> {
     match load(dir) {
         Ok(id) => Ok((id, false)),
-        Err(_) => Ok((create(dir)?, true)),
+        Err(e) => {
+            if dir.join("cert.der").exists() || dir.join("key.dpapi").exists() {
+                let stamp = OffsetDateTime::now_utc().unix_timestamp();
+                for name in ["key.dpapi", "cert.der", "cert.pem", "cert.json"] {
+                    let p = dir.join(name);
+                    if p.exists() {
+                        let _ = std::fs::rename(&p, dir.join(format!("{name}.old-{stamp}")));
+                    }
+                }
+                crate::log::warn(&format!(
+                    "Novi certifikat (novi kod za uparivanje – klijenti se moraju ponovno upariti); razlog: {e}. Stari je sačuvan kao *.old-{stamp}."
+                ));
+            }
+            Ok((create(dir)?, true))
+        }
     }
 }
 

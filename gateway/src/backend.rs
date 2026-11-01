@@ -50,7 +50,11 @@ impl Backend {
     }
 
     async fn connect(&self) -> io::Result<Conn> {
-        let mut pipe = win::connect_pipe(&self.pipe_name, &self.owner_sid)?;
+        // 5.0.1 (audit G-05): WaitNamedPipeW blokira (do 10 s) – izvan radnih niti izvršitelja
+        let (name, owner) = (self.pipe_name.clone(), self.owner_sid.clone());
+        let mut pipe = tokio::task::spawn_blocking(move || win::connect_pipe(&name, &owner))
+            .await
+            .map_err(|_| io::Error::other("spajanje na kanal prekinuto"))??;
         let hello = timeout(HELLO_TIMEOUT, read_frame(&mut pipe, 4096))
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "servis nije poslao hello"))??;
@@ -94,8 +98,11 @@ impl Backend {
             Some(c) => (c, false),
             None => (self.connect().await?, true),
         };
+        // 5.0.1 (audit G-06): ponovno samo za zahtjeve bez posljedica (GET/HEAD, config) – prijava, lozinka i e-pošta se
+        // ne smiju izvršiti dvaput ako je servis zahtjev već obradio prije prekida
+        let safe = msg["type"] == "config" || matches!(msg["method"].as_str(), Some("GET") | Some("HEAD"));
         let result = match self.exchange(&mut conn, msg.clone()).await {
-            Err(e) if !fresh && matches!(e.kind(), io::ErrorKind::BrokenPipe | io::ErrorKind::UnexpectedEof) => {
+            Err(e) if !fresh && safe && matches!(e.kind(), io::ErrorKind::BrokenPipe | io::ErrorKind::UnexpectedEof) => {
                 conn = self.connect().await?;
                 self.exchange(&mut conn, msg).await
             }

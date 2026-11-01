@@ -34,7 +34,7 @@ if ($Register) {
     if (-not $DataDir) { throw "-DataDir je obavezan" }
     Stop-Gateway
     $exe = Join-Path $Register "solari-gateway.exe"
-    $bin = "binPath= `"\`"$exe\`" --service`" obj= `"NT SERVICE\$Name`" start= delayed-auto"
+    $bin = "binPath= `"\`"$exe\`" --service`" obj= `"NT SERVICE\$Name`" start= auto"
     if (Get-Service -Name $Name -ErrorAction SilentlyContinue) {
         $rc = Invoke-Sc "config $Name $bin"
     } else {
