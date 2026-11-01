@@ -25,12 +25,22 @@ target_compile_definitions(solari_core PUBLIC UNICODE _UNICODE WIN32_LEAN_AND_ME
                                               SOLARI_VERSION="${PROJECT_VERSION}")
 target_link_libraries(solari_core PUBLIC sqlite3 ws2_32 iphlpapi bcrypt ncrypt secur32 crypt32 setupapi hid winhttp windowscodecs ole32 oleaut32 uuid shell32
                                          shlwapi advapi32 user32 gdi32 shcore dwmapi)
+# 4.0 (W8): gradnja s AddressSanitizerom i UndefinedBehaviorSanitizerom samo za testove i fuzz (zasebna mapa gradnje);
+# ASan na mingw traži dinamičku izvršnu biblioteku, pa se tada ne povezuje statički i ne uključuje CFG
+option(SOLARI_SANITIZE "ASan + UBSan (samo testovi/fuzz, nikad izdanje)" OFF)
+if(SOLARI_SANITIZE)
+    target_compile_options(solari_core PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+    target_link_options(solari_core PUBLIC -fsanitize=address,undefined)
+    set(SOLARI_STATIC "")
+else()
+    set(SOLARI_STATIC -static)
+endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(solari_core PUBLIC -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
                                               -Wno-unknown-pragmas)
     # 4.0 (SMA-22): zaštita stoga i Control Flow Guard (uz ASLR/DEP koje llvm-mingw već uključuje)
     target_compile_options(solari_core PUBLIC -fstack-protector-strong)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT SOLARI_SANITIZE)
         target_compile_options(solari_core PUBLIC -mguard=cf)
         target_link_options(solari_core PUBLIC -mguard=cf -Wl,--guard-cf)
     endif()
@@ -66,8 +76,14 @@ add_dependencies(SolarniServer runtime_files)
 
 # ---------------------------------------------------------------- testovi (doctest)
 enable_testing()
-add_executable(solari_tests tests/test_main.cpp tests/test_security.cpp tests/test_b1.cpp)
+add_executable(solari_tests tests/test_main.cpp tests/test_security.cpp tests/test_b1.cpp tests/test_devices_s2.cpp)
 target_link_libraries(solari_tests PRIVATE solari_core)
-target_link_options(solari_tests PRIVATE -static)
+target_link_options(solari_tests PRIVATE ${SOLARI_STATIC})
+add_dependencies(solari_tests runtime_files)  # testovi trebaju web\ i curl\ pokraj .exe
 target_compile_definitions(solari_tests PRIVATE SOLARI_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME solari_tests COMMAND solari_tests)
+
+# ---------------------------------------------------------------- fuzz (WT-15, AC-SRV-7): solari_fuzz [iteracije] [sjeme] [meta]
+add_executable(solari_fuzz tests/fuzz_main.cpp)
+target_link_libraries(solari_fuzz PRIVATE solari_core)
+target_link_options(solari_fuzz PRIVATE ${SOLARI_STATIC})

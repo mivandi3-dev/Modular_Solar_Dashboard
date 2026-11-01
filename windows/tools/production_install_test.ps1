@@ -1,0 +1,136 @@
+﻿# Solarni monitor 4.0 – test PRODUKCIJSKE instalacije (UAC, zadaci SYSTEM, usluga gatewaya, ACL, vatrozid, deinstalacija).
+# Pokreće VLASNIK u PowerShellu „Pokreni kao administrator” na računalu za test (najbolje čisto računalo ili VM):
+#   powershell -ExecutionPolicy Bypass -File production_install_test.ps1 -Installers "C:\Modularnisolarnidashboard40\installers\windows"
+# Rezultat: production-install-test.txt pokraj skripte (PASS/FAIL po provjeri, s dokazom). Ništa se ne briše osim
+# programa koje skripta sama instalira na kraju (-Uninstall); podaci u %ProgramData% ostaju.
+param(
+    [Parameter(Mandatory = $true)][string]$Installers,
+    [string]$Pin = "246813",
+    [switch]$Uninstall
+)
+$ErrorActionPreference = "Continue"
+$out = Join-Path $PSScriptRoot "production-install-test.txt"
+$lines = New-Object System.Collections.Generic.List[string]
+$fail = 0
+function Check([string]$name, [bool]$ok, [string]$detail = "") {
+    $script:lines.Add(("{0} {1}{2}" -f ($(if ($ok) { "PASS" } else { "FAIL" }), $name, $(if ($detail) { " -- $detail" } else { "" }))))
+    if (-not $ok) { $script:fail++ }
+    Write-Host $script:lines[$script:lines.Count - 1]
+}
+
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+Check "pokrenuto s administratorskim pravima (UAC potvrđen)" $admin
+if (-not $admin) { $lines | Set-Content $out -Encoding utf8; exit 1 }
+$lines.Add("Računalo: $env:COMPUTERNAME, Windows $([Environment]::OSVersion.Version), $(Get-Date -Format s)")
+
+$client = Get-ChildItem $Installers -Filter "SolarniMonitor2-Setup-*.exe" | Select-Object -First 1
+$server = Get-ChildItem $Installers -Filter "SolarniServer-Setup-*.exe" | Select-Object -First 1
+foreach ($f in @($client, $server)) {
+    $sig = Get-AuthenticodeSignature $f.FullName
+    $lines.Add("$($f.Name): SHA-256 $((Get-FileHash $f.FullName).Hash), potpis: $($sig.Status)")
+}
+
+# ---------------------------------------------------------------- instalacija
+$p = Start-Process $server.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$PSScriptRoot\server-setup.log`"" -Wait -PassThru
+Check "instalacija poslužitelja (tiho) završena s kodom 0" ($p.ExitCode -eq 0) "kod $($p.ExitCode)"
+$p = Start-Process $client.FullName -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /PIN=$Pin /LOG=`"$PSScriptRoot\client-setup.log`"" -Wait -PassThru
+Check "instalacija klijenta (tiho, /PIN) završena s kodom 0" ($p.ExitCode -eq 0) "kod $($p.ExitCode)"
+Start-Sleep 20
+
+# ---------------------------------------------------------------- zadaci sustava i usluga gatewaya
+foreach ($t in @("Solarni monitor 2 - poller", "SolarniPosluzitelj")) {
+    $task = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+    Check "zadatak '$t' postoji i radi kao SYSTEM" ($task -and $task.Principal.UserId -eq "SYSTEM") "$($task.Principal.UserId) / $($task.State)"
+    Check "zadatak '$t' radi" ($task -and $task.State -eq "Running") "$($task.State)"
+}
+$svc = Get-CimInstance Win32_Service -Filter "Name='SolariGateway'"
+Check "usluga SolariGateway postoji" ($null -ne $svc)
+Check "usluga radi kao NT SERVICE\SolariGateway (virtualni račun)" ($svc.StartName -eq "NT SERVICE\SolariGateway") "$($svc.StartName)"
+Check "usluga je pokrenuta" ($svc.State -eq "Running") "$($svc.State)"
+$privs = (& sc.exe qprivs SolariGateway) -join " "
+Check "usluga ima samo SeChangeNotifyPrivilege" ($privs -match "SeChangeNotifyPrivilege" -and ($privs -split "Se[A-Za-z]+Privilege").Count -le 2) $privs
+$sidtype = (& sc.exe qsidtype SolariGateway) -join " "
+Check "SID usluge: UNRESTRICTED" ($sidtype -match "UNRESTRICTED") $sidtype
+$gw = Get-Process solari-gateway -IncludeUserName -ErrorAction SilentlyContinue
+Check "proces gatewaya radi pod NT SERVICE\SolariGateway (AC-GW-3)" ($gw -and $gw.UserName -eq "NT SERVICE\SolariGateway") "$($gw.UserName)"
+
+# ---------------------------------------------------------------- mreža (AC-GW-2) i vatrozid
+$listen = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue
+$srvPids = (Get-Process SolarniServer -ErrorAction SilentlyContinue).Id
+Check "C++ servis poslužitelja nema TCP listener" (-not ($listen | Where-Object { $srvPids -contains $_.OwningProcess })) (($listen | Where-Object { $srvPids -contains $_.OwningProcess } | ForEach-Object { $_.LocalPort }) -join ",")
+$gwPort = $listen | Where-Object { $gw -and $_.OwningProcess -eq $gw.Id }
+Check "gateway sluša 8700" (($gwPort | Where-Object LocalPort -eq 8700) -ne $null) (($gwPort | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" }) -join ",")
+foreach ($r in @(@{n = "Solarni posluzitelj - gateway"; port = "8700"; prog = "solari-gateway.exe"}, @{n = "Solarni monitor 2 - pregled iz mreze"; port = "8600"; prog = "SolarniMonitor.exe"})) {
+    $rule = Get-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue
+    $pf = $rule | Get-NetFirewallPortFilter
+    $af = $rule | Get-NetFirewallApplicationFilter
+    Check "vatrozid '$($r.n)': port $($r.port), samo $($r.prog), profil $($rule.Profile)" ($rule -and $pf.LocalPort -eq $r.port -and $af.Program -like "*$($r.prog)") "$($pf.LocalPort) $($af.Program)"
+}
+Check "staro pravilo 'Solarni posluzitelj - API' (cijeli program) uklonjeno" (-not (Get-NetFirewallRule -DisplayName "Solarni posluzitelj - API" -ErrorAction SilentlyContinue))
+try {
+    [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ping = Invoke-RestMethod "https://127.0.0.1:8700/api/v1/ping" -TimeoutSec 10
+    Check "HTTPS ping kroz gateway → C++ servis (api 4)" ($ping.api -eq 4) ($ping | ConvertTo-Json -Compress)
+} catch { Check "HTTPS ping kroz gateway" $false $_.Exception.Message }
+
+# ---------------------------------------------------------------- kanali (AC-GW-4)
+foreach ($pipe in @("SolarniServer.Api.v1")) {
+    try {
+        $c = New-Object System.IO.Pipes.NamedPipeClientStream(".", $pipe, [System.IO.Pipes.PipeDirection]::InOut)
+        $c.Connect(2000); $c.Dispose()
+        Check "administrator (bez promjene ACL-a) NE može otvoriti kanal $pipe" $false "spojeno"
+    } catch { Check "administrator (bez promjene ACL-a) NE može otvoriti kanal $pipe" ($_.Exception -is [UnauthorizedAccessException] -or $_.Exception.InnerException -is [UnauthorizedAccessException]) $_.Exception.Message }
+}
+
+# ---------------------------------------------------------------- ACL (SMA-02)
+function Has-UsersWrite([string]$path) {
+    $acl = Get-Acl $path
+    foreach ($a in $acl.Access) {
+        $sid = try { $a.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } catch { "" }
+        if ($sid -in @("S-1-5-32-545", "S-1-5-11", "S-1-1-0", "S-1-5-4") -and $a.AccessControlType -eq "Allow" -and
+            ($a.FileSystemRights -band ([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::Delete))) { return $true }
+    }
+    return $false
+}
+$cd = Join-Path $env:ProgramData "SolarniMonitor2"
+Check "klijent: mapa postavki – Users bez prava upisa" (-not (Has-UsersWrite $cd))
+foreach ($sub in @("data", "service", "config.json")) { if (Test-Path (Join-Path $cd $sub)) { Check "klijent: $sub – Users bez prava upisa" (-not (Has-UsersWrite (Join-Path $cd $sub))) } }
+Check "klijent: ui\ – Users smiju mijenjati (raspored, slike)" (Has-UsersWrite (Join-Path $cd "ui"))
+$secrets = Join-Path $cd "secrets"
+Check "klijent: secrets\ postoji (PIN iz instalacije)" (Test-Path (Join-Path $secrets "secrets.json"))
+Check "klijent: secrets\ – Users nemaju nikakav pristup" (-not ((Get-Acl $secrets).Access | Where-Object { $_.IdentityReference -match "Users|Korisnici|Everyone|Svi" }))
+$sd = Join-Path $env:ProgramData "SolarniServer"
+Check "poslužitelj: mapa – samo SYSTEM i administratori" (-not ((Get-Acl $sd).Access | Where-Object { $_.IdentityReference -match "Users|Korisnici|Everyone|Svi|Authenticated" }))
+Check "poslužitelj: gateway\ – usluga gatewaya ima pravo izmjene" (((Get-Acl (Join-Path $sd "gateway")).Access | Where-Object { $_.IdentityReference -eq "NT SERVICE\SolariGateway" }) -ne $null)
+Check "gateway je izradio certifikat (ključ pod DPAPI-jem)" (Test-Path (Join-Path $sd "gateway\key.dpapi"))
+$gwLog = Get-Content (Join-Path $sd "gateway\gateway.log") -Raw -ErrorAction SilentlyContinue
+Check "gateway: DPAPI računa usluge dostupan (bez zamjene DPAPI-jem računala)" ($gwLog -and $gwLog -notmatch "DPAPI računa usluge nije dostupan") ""
+Check "servis je zapisao otisak gatewaya (service\gateway.json)" (Test-Path (Join-Path $sd "service\gateway.json"))
+
+# ---------------------------------------------------------------- broker (SMA-02) – poller kao SYSTEM
+$plog = Get-Content (Join-Path $cd "service\logs\poller.log") -Raw -ErrorAction SilentlyContinue
+Check "poller (SYSTEM) je pokrenuo broker postavki" ($plog -match "Broker postavki pokrenut") (($plog -split "`n" | Select-String "Broker" | Select-Object -Last 2) -join " | ")
+
+# ---------------------------------------------------------------- deinstalacija
+if ($Uninstall) {
+    foreach ($name in @("Solarni monitor", "Solarni poslužitelj")) {
+        $u = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" | ForEach-Object { Get-ItemProperty $_.PSPath } |
+            Where-Object { $_.DisplayName -eq $name } | Select-Object -First 1
+        if ($u) {
+            $exe = ($u.UninstallString -replace '"', '')
+            $p = Start-Process $exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+            Check "deinstalacija '$name'" ($p.ExitCode -eq 0) "kod $($p.ExitCode)"
+        }
+    }
+    Start-Sleep 5
+    Check "usluga SolariGateway uklonjena" (-not (Get-Service SolariGateway -ErrorAction SilentlyContinue))
+    Check "zadaci uklonjeni" (-not (Get-ScheduledTask -TaskName "Solarni*" -ErrorAction SilentlyContinue))
+    Check "pravila vatrozida uklonjena" (-not (Get-NetFirewallRule -DisplayName "Solarni*" -ErrorAction SilentlyContinue))
+    Check "podaci ostaju (tiha deinstalacija ne briše %ProgramData%)" ((Test-Path $cd) -and (Test-Path $sd))
+}
+
+$lines.Add("")
+$lines.Add("Ukupno FAIL: $fail")
+$lines | Set-Content $out -Encoding utf8
+Write-Host "Rezultat: $out"

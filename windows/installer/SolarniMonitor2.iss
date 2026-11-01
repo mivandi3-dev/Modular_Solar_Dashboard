@@ -435,15 +435,23 @@ begin
   end;
 end;
 
+{ tiha instalacija (npr. automatski test): Setup.exe /VERYSILENT /PIN=12345 – stranica se tada ne prikazuje }
+function PinValue: String;
+begin
+  Result := PinPage.Values[0];
+  if Result = '' then Result := ExpandConstant('{param:PIN|}');
+  if (Length(Result) < 4) or (Length(Result) > 8) or not IsDigits(Result) then Result := '';
+end;
+
 function PinEntered: Boolean;
 begin
-  Result := PinPage.Values[0] <> '';
+  Result := PinValue <> '';
 end;
 
 function PinFile(Param: String): String;
 begin
   Result := ExpandConstant('{tmp}\pin.txt');
-  SaveStringToFile(Result, PinPage.Values[0], False);
+  SaveStringToFile(Result, PinValue, False);
 end;
 #else
 function PinEntered: Boolean;
