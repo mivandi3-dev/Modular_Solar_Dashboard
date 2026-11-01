@@ -1,6 +1,7 @@
 #include "util.hpp"
 
 #include <windows.h>
+#include <shlobj.h>
 #include <sddl.h>
 
 #include <cstdio>
@@ -169,6 +170,15 @@ void create_private_dir(const fs::path& dir) {
     if (!ok && GetLastError() != ERROR_ALREADY_EXISTS) throw std::runtime_error("Mapa se ne može stvoriti: " + narrow(dir.wstring()));
 }
 fs::path backups_dir() { return service_dir() / L"backups"; }
+
+fs::path webview_user_data_dir() {
+    PWSTR local = nullptr;
+    fs::path base;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &local)) && local) base = local;
+    CoTaskMemFree(local);
+    if (base.empty()) return home_dir() / L"webview2";  // bez profila korisnika (ne bi se trebalo dogoditi)
+    return base / home_dir().filename() / L"webview2";
+}
 
 // ---------------------------------------------------------------- zapisnik
 namespace {

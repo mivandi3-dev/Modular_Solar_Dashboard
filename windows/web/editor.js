@@ -108,7 +108,7 @@
   side.setAttribute("aria-label", T("Widgeti"));
   side.innerHTML = `
     <header><h2>${T("Widgeti")}</h2><button type="button" data-se="close" title="${T("Sakrij izbornik")}">${T("Sakrij")} ›</button></header>
-    <p class="hint">${T("Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.")}</p>
+    <p class="hint">${T("Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.")}</p>
     <div id="se-pages" role="group" aria-label="${T("Stranice rasporeda")}"></div>
     <input type="search" placeholder="${T("Traži widget…")}" aria-label="${T("Traži widget")}">
     <div id="se-list"></div>

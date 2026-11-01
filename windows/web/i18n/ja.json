@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "建物の消費量",
   "Potvrdi brisanje": "削除を確認",
   "Povećaj": "大きく",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "ウィジェットを画面にドラッグするか、<b>+</b> をクリックします。画面上のウィジェットはドラッグで移動、右下の角でサイズ変更、⚙ はオプション、✕ は削除です。全画面（F11）ではメニューは非表示になります。",
   "Pozitivna snaga mjerača znači predaju u mrežu": "メーターの正の電力は系統への売電を意味します",
   "Pošalji probnu poruku": "テストメッセージを送信",
   "Pošiljatelj": "送信者",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "送信中…",
   "Upišite kod iz e-pošte.": "メールに記載のコードを入力してください。",
   "Nove lozinke se ne podudaraju.": "新しいパスワードが一致しません。",
-  "Poslužitelj je vratio grešku.": "サーバーがエラーを返しました。"
+  "Poslužitelj je vratio grešku.": "サーバーがエラーを返しました。",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "ウィジェットを画面にドラッグするか、<b>+</b> をクリックします。画面上のウィジェットはドラッグで移動、右下の角でサイズ変更、⚙ はオプション、✕ は削除です。全画面（F11 / Alt + Enter）ではメニューは非表示になります。",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter またはダブルクリック"
  }
 }

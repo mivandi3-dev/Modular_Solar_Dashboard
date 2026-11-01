@@ -42,6 +42,9 @@ bool dir_writable(const fs::path& dir);
 // Baca ako je mapa točka ponovne obrade.
 void create_private_dir(const fs::path& dir);
 fs::path backups_dir();    // 4.0: service\backups (piše samo SYSTEM)
+// Profil preglednika WebView2 po korisniku: %LOCALAPPDATA%\<mapa podataka>\webview2. Mapa podataka u ProgramData je od 4.0
+// za korisnike samo za čitanje (SMA-02), a WebView2 mora pisati u profil – inače prozor ostaje prazan (5.0.1).
+fs::path webview_user_data_dir();
 // 4.0 (SMA-02): mapa u koju piše samo zadatak sustava (SYSTEM) – instalacija joj daje ACL samo za SYSTEM i
 // administratore (Users čitanje): sigurnosne kopije, alerts.json, zapisi pollera i servisa
 fs::path service_dir();

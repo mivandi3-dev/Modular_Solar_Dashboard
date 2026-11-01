@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "Bina tüketimi",
   "Potvrdi brisanje": "Silmeyi onayla",
   "Povećaj": "Büyüt",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "Bir widget'ı ekrana sürükleyin veya <b>+</b> düğmesine tıklayın. Ekrandaki widget'ı sürükleyerek taşıyın, boyutunu sağ alt köşeden değiştirin, ⚙ seçeneklerdir, ✕ kaldırır. Tam ekranda (F11) menü gizlenir.",
   "Pozitivna snaga mjerača znači predaju u mrežu": "Pozitif sayaç gücü şebekeye verme anlamına gelir",
   "Pošalji probnu poruku": "Deneme mesajı gönder",
   "Pošiljatelj": "Gönderen",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "Gönderiliyor…",
   "Upišite kod iz e-pošte.": "E-postadaki kodu girin.",
   "Nove lozinke se ne podudaraju.": "Yeni parolalar eşleşmiyor.",
-  "Poslužitelj je vratio grešku.": "Sunucu bir hata döndürdü."
+  "Poslužitelj je vratio grešku.": "Sunucu bir hata döndürdü.",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Bir widget'ı ekrana sürükleyin veya <b>+</b> düğmesine tıklayın. Ekrandaki widget'ı sürükleyerek taşıyın, boyutunu sağ alt köşeden değiştirin, ⚙ seçeneklerdir, ✕ kaldırır. Tam ekranda (F11 / Alt + Enter) menü gizlenir.",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter veya çift tıklama"
  }
 }

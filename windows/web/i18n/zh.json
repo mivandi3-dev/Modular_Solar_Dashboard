@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "建筑用电量",
   "Potvrdi brisanje": "确认删除",
   "Povećaj": "增大",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "将小组件拖到屏幕上或点击 <b>+</b>。拖动可移动屏幕上的小组件，拖动右下角可调整大小，⚙ 为选项，✕ 为移除。在全屏（F11）下菜单会隐藏。",
   "Pozitivna snaga mjerača znači predaju u mrežu": "电表正功率表示向电网送电",
   "Pošalji probnu poruku": "发送测试邮件",
   "Pošiljatelj": "发件人",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "正在发送…",
   "Upišite kod iz e-pošte.": "请输入邮件中的代码。",
   "Nove lozinke se ne podudaraju.": "两次输入的新密码不一致。",
-  "Poslužitelj je vratio grešku.": "服务器返回错误。"
+  "Poslužitelj je vratio grešku.": "服务器返回错误。",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "将小组件拖到屏幕上或点击 <b>+</b>。拖动可移动屏幕上的小组件，拖动右下角可调整大小，⚙ 为选项，✕ 为移除。在全屏（F11 / Alt + Enter）下菜单会隐藏。",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 或双击"
  }
 }

@@ -52,7 +52,7 @@
     b.addEventListener("click", (e) => { e.stopPropagation(); action(); });
     bar.appendChild(b);
   };
-  button("⛶ " + T("Cijeli zaslon"), "F11", () => call("toggle_fullscreen"));
+  button("⛶ " + T("Cijeli zaslon"), "F11 / Alt+Enter", () => call("toggle_fullscreen"));
   button("⚙ " + T("Postavke"), "F2", () => call("open_settings"));
   button("? " + T("Prečaci"), "F1", () => toggleHelp());
   document.body.appendChild(bar);
@@ -60,7 +60,7 @@
   const help = document.createElement("div");
   help.id = "solari-help";
   help.innerHTML = `<div class="box" role="dialog" aria-label="${T("Prečaci")}"><h2>${T("Prečaci na tipkovnici")}</h2><table>
-    <tr><td>${T("F11 ili dvoklik")}</td><td>${T("Cijeli zaslon uključi / isključi")}</td></tr>
+    <tr><td>${T("F11, Alt + Enter ili dvoklik")}</td><td>${T("Cijeli zaslon uključi / isključi")}</td></tr>
     <tr><td>Esc</td><td>${T("Izlaz iz cijelog zaslona")}</td></tr>
     <tr><td>${T("F2 ili Ctrl + ,")}</td><td>${T("Postavke (mreža, elektrana, prikaz, sustav)")}</td></tr>
     <tr><td>F5</td><td>${T("Ponovno učitaj prikaz")}</td></tr>
@@ -95,6 +95,11 @@
 
   document.addEventListener("dblclick", () => call("toggle_fullscreen"));
   document.addEventListener("keydown", (e) => {
+    if (e.altKey && e.key === "Enter" && !e.ctrlKey && !e.shiftKey) {  // Alt+Enter: cijeli zaslon uključi / isključi
+      e.preventDefault();
+      if (!e.repeat) call("toggle_fullscreen");
+      return;
+    }
     const handled = {
       F11: () => call("toggle_fullscreen"),
       Escape: () => (help.classList.contains("show") ? toggleHelp(false) : call("exit_fullscreen")),

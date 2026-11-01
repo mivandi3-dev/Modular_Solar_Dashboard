@@ -846,3 +846,23 @@ TEST_CASE("Zaboravljena lozinka: račun s aktivacijom na čekanju postavlja lozi
     CHECK_FALSE(users.get(id)->activation_pending);
     CHECK(users.login("mia@primjer.hr", "Novo-Sunce-2027!", "x", t + 2).status == St::Ok);
 }
+
+TEST_CASE("5.0.1: profil preglednika WebView2 je po korisniku (%LOCALAPPDATA%), ne u mapi podataka samo za čitanje") {
+    TmpHome home;
+    const fs::path dir = webview_user_data_dir();
+    CHECK(dir.filename() == L"webview2");
+    CHECK(dir.parent_path().filename() == home_dir().filename());
+    const std::wstring d = dir.wstring(), h = home_dir().wstring();
+    CHECK(d.rfind(h, 0) != 0);  // nije unutar mape podataka (u produkciji ProgramData, Users samo čitaju)
+    wchar_t* local = nullptr;
+    size_t n = 0;
+    REQUIRE(_wdupenv_s(&local, &n, L"LOCALAPPDATA") == 0);
+    REQUIRE(local);
+    CHECK(d.rfind(local, 0) == 0);
+    free(local);
+    std::error_code ec;
+    fs::create_directories(dir, ec);  // korisnik mora moći pisati (WebView2 stvara profil)
+    CHECK_FALSE(ec);
+    CHECK(dir_writable(dir));
+    fs::remove_all(dir.parent_path(), ec);
+}

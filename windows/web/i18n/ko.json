@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "건물 소비량",
   "Potvrdi brisanje": "삭제 확인",
   "Povećaj": "크게",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "위젯을 화면으로 끌어오거나 <b>+</b>를 클릭하세요. 화면의 위젯은 끌어서 옮기고, 오른쪽 아래 모서리로 크기를 바꾸며, ⚙는 옵션, ✕는 제거입니다. 전체 화면(F11)에서는 메뉴가 숨겨집니다.",
   "Pozitivna snaga mjerača znači predaju u mrežu": "계량기의 양의 전력은 계통으로의 송전을 의미합니다",
   "Pošalji probnu poruku": "테스트 메시지 보내기",
   "Pošiljatelj": "보내는 사람",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "보내는 중…",
   "Upišite kod iz e-pošte.": "이메일의 코드를 입력하세요.",
   "Nove lozinke se ne podudaraju.": "새 비밀번호가 일치하지 않습니다.",
-  "Poslužitelj je vratio grešku.": "서버가 오류를 반환했습니다."
+  "Poslužitelj je vratio grešku.": "서버가 오류를 반환했습니다.",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "위젯을 화면으로 끌어오거나 <b>+</b>를 클릭하세요. 화면의 위젯은 끌어서 옮기고, 오른쪽 아래 모서리로 크기를 바꾸며, ⚙는 옵션, ✕는 제거입니다. 전체 화면(F11 / Alt + Enter)에서는 메뉴가 숨겨집니다.",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter 또는 두 번 클릭"
  }
 }

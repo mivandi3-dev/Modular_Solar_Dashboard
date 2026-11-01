@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "Consumo dell'edificio",
   "Potvrdi brisanje": "Conferma eliminazione",
   "Povećaj": "Aumenta",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "Trascina un widget sullo schermo o fai clic su <b>+</b>. Sposta un widget trascinandolo, ridimensionalo con l'angolo in basso a destra, ⚙ sono le opzioni, ✕ lo rimuove. A schermo intero (F11) il menu è nascosto.",
   "Pozitivna snaga mjerača znači predaju u mrežu": "Una potenza positiva del contatore significa immissione in rete",
   "Pošalji probnu poruku": "Invia un messaggio di prova",
   "Pošiljatelj": "Mittente",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "Invio…",
   "Upišite kod iz e-pošte.": "Inserisci il codice dall'e-mail.",
   "Nove lozinke se ne podudaraju.": "Le nuove password non coincidono.",
-  "Poslužitelj je vratio grešku.": "Il server ha restituito un errore."
+  "Poslužitelj je vratio grešku.": "Il server ha restituito un errore.",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Trascina un widget sullo schermo o fai clic su <b>+</b>. Sposta un widget trascinandolo, ridimensionalo con l'angolo in basso a destra, ⚙ sono le opzioni, ✕ lo rimuove. A schermo intero (F11 / Alt + Enter) il menu è nascosto.",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter o doppio clic"
  }
 }

@@ -93,7 +93,7 @@ bool ensure_environment() {
         done = true;
         return S_OK;
     });
-    const std::wstring user_data = (home_dir() / L"webview2").wstring();
+    const std::wstring user_data = webview_user_data_dir().wstring();  // po korisniku (%LOCALAPPDATA%), ne ProgramData
     const HRESULT hr = create(nullptr, user_data.c_str(), nullptr, handler);
     handler->Release();
     if (FAILED(hr)) return false;

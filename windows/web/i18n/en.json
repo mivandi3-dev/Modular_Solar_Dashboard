@@ -514,7 +514,6 @@
   "Potrošnja zgrade": "Building consumption",
   "Potvrdi brisanje": "Confirm delete",
   "Povećaj": "Increase",
-  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11) izbornik se skriva.": "Drag a widget onto the screen or click <b>+</b>. Move a widget on the screen by dragging, resize it with the bottom-right corner, ⚙ opens options, ✕ removes it. In full screen (F11) the menu is hidden.",
   "Pozitivna snaga mjerača znači predaju u mrežu": "Positive meter power means export to the grid",
   "Pošalji probnu poruku": "Send a test message",
   "Pošiljatelj": "Sender",
@@ -1071,6 +1070,8 @@
   "Šaljem…": "Sending…",
   "Upišite kod iz e-pošte.": "Enter the code from the email.",
   "Nove lozinke se ne podudaraju.": "The new passwords do not match.",
-  "Poslužitelj je vratio grešku.": "The server returned an error."
+  "Poslužitelj je vratio grešku.": "The server returned an error.",
+  "Povucite widget na ekran ili kliknite <b>+</b>. Widget na ekranu premjestite povlačenjem, veličinu mijenjate kutom dolje desno, ⚙ su opcije, ✕ uklanja. U cijelom zaslonu (F11 ili Alt + Enter) izbornik se skriva.": "Drag a widget onto the screen or click <b>+</b>. Move a widget on the screen by dragging, resize it with the bottom-right corner, ⚙ opens options, ✕ removes it. In full screen (F11 / Alt + Enter) the menu is hidden.",
+  "F11, Alt + Enter ili dvoklik": "F11, Alt + Enter or double-click"
  }
 }
