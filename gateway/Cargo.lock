@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "solari-gateway"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "base64",
  "bytes",
