@@ -1006,6 +1006,12 @@
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "from the Solar server window (Settings → Server); only for the first sign-in to a server on the local network",
   "Aktivacija računa:": "Account activation:",
   "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "you signed in with a one-time activation code. Enter your own new password – at least 10 characters and at least three character types (lower and upper case letters, digits, other characters) or at least 16 characters.",
-  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "from the Solar server window (Settings → Server) – only for the first sign-in to a server on the local network"
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "from the Solar server window (Settings → Server) – only for the first sign-in to a server on the local network",
+  "Servis Solarnog monitora nije pokrenut ili nije dostupan.": "The Solarni monitor service is not running or not available.",
+  "PIN postavki nije postavljen. Pokrenite instalaciju Solarnog monitora ponovno (popravak) i upišite PIN.": "No settings PIN is set. Run the Solarni monitor setup again (repair) and enter a PIN.",
+  "PIN postavki je obavezan i ne može se ukloniti.": "The settings PIN is mandatory and cannot be removed.",
+  "Neispravan zahtjev.": "Invalid request.",
+  "Uvoz nije uspio.": "Import failed.",
+  "Mapa podataka je spojnica – uvoz odbijen.": "The data folder is a junction – import refused."
  }
 }

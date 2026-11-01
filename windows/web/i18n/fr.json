@@ -1006,6 +1006,12 @@
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "depuis la fenêtre du serveur solaire (Paramètres → Serveur) ; uniquement à la première connexion à un serveur du réseau local",
   "Aktivacija računa:": "Activation du compte :",
   "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "vous vous êtes connecté avec un code d'activation à usage unique. Saisissez votre propre nouveau mot de passe – au moins 10 caractères et au moins trois types de caractères (minuscules, majuscules, chiffres, autres caractères) ou au moins 16 caractères.",
-  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "depuis la fenêtre du serveur solaire (Paramètres → Serveur)  – uniquement à la première connexion à un serveur du réseau local"
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "depuis la fenêtre du serveur solaire (Paramètres → Serveur)  – uniquement à la première connexion à un serveur du réseau local",
+  "Servis Solarnog monitora nije pokrenut ili nije dostupan.": "Le service Solarni monitor n'est pas démarré ou n'est pas disponible.",
+  "PIN postavki nije postavljen. Pokrenite instalaciju Solarnog monitora ponovno (popravak) i upišite PIN.": "Aucun code PIN des paramètres n'est défini. Relancez l'installation de Solarni monitor (réparation) et saisissez un code PIN.",
+  "PIN postavki je obavezan i ne može se ukloniti.": "Le code PIN des paramètres est obligatoire et ne peut pas être supprimé.",
+  "Neispravan zahtjev.": "Requête non valide.",
+  "Uvoz nije uspio.": "L'importation a échoué.",
+  "Mapa podataka je spojnica – uvoz odbijen.": "Le dossier de données est une jonction – importation refusée."
  }
 }

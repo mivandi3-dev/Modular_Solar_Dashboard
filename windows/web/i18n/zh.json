@@ -1006,6 +1006,12 @@
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "来自太阳能服务器窗口（设置 → 服务器）；仅在首次登录局域网中的服务器时需要",
   "Aktivacija računa:": "账户激活：",
   "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "您使用一次性激活码登录。请输入您自己的新密码——至少 10 个字符且至少包含三类字符（小写字母、大写字母、数字、其他字符），或至少 16 个字符。",
-  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "来自太阳能服务器窗口（设置 → 服务器）；仅在首次登录局域网中的服务器时需要"
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "来自太阳能服务器窗口（设置 → 服务器）；仅在首次登录局域网中的服务器时需要",
+  "Servis Solarnog monitora nije pokrenut ili nije dostupan.": "Solarni monitor 服务未运行或不可用。",
+  "PIN postavki nije postavljen. Pokrenite instalaciju Solarnog monitora ponovno (popravak) i upišite PIN.": "未设置设置 PIN。请重新运行 Solarni monitor 安装程序（修复）并输入 PIN。",
+  "PIN postavki je obavezan i ne može se ukloniti.": "设置 PIN 为必填项，不能删除。",
+  "Neispravan zahtjev.": "无效请求。",
+  "Uvoz nije uspio.": "导入失败。",
+  "Mapa podataka je spojnica – uvoz odbijen.": "数据文件夹是联接点 – 已拒绝导入。"
  }
 }

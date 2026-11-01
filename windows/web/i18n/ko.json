@@ -1006,6 +1006,12 @@
   "s prozora Solarnog poslužitelja (Postavke → Poslužitelj); samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "태양광 서버 창(설정 → 서버)에서. 로컬 네트워크의 서버에 처음 로그인할 때만",
   "Aktivacija računa:": "계정 활성화:",
   "prijavili ste se jednokratnim aktivacijskim kodom. Upišite svoju lozinku – najmanje 10 znakova i barem tri vrste znakova (mala i velika slova, brojke, ostali znakovi) ili barem 16 znakova.": "일회용 활성화 코드로 로그인했습니다. 새 비밀번호를 입력하세요 – 10자 이상이며 세 가지 이상의 문자 유형(소문자, 대문자, 숫자, 기타 문자)을 포함하거나 16자 이상.",
-  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "태양광 서버 창(설정 → 서버)에서. 로컬 네트워크의 서버에 처음 로그인할 때만"
+  "s prozora Solarnog poslužitelja (Postavke → Poslužitelj) – samo pri prvoj prijavi na poslužitelj u lokalnoj mreži": "태양광 서버 창(설정 → 서버)에서. 로컬 네트워크의 서버에 처음 로그인할 때만",
+  "Servis Solarnog monitora nije pokrenut ili nije dostupan.": "Solarni monitor 서비스가 실행되고 있지 않거나 사용할 수 없습니다.",
+  "PIN postavki nije postavljen. Pokrenite instalaciju Solarnog monitora ponovno (popravak) i upišite PIN.": "설정 PIN이 설정되지 않았습니다. Solarni monitor 설치를 다시 실행(복구)하고 PIN을 입력하세요.",
+  "PIN postavki je obavezan i ne može se ukloniti.": "설정 PIN은 필수이며 삭제할 수 없습니다.",
+  "Neispravan zahtjev.": "잘못된 요청입니다.",
+  "Uvoz nije uspio.": "가져오기에 실패했습니다.",
+  "Mapa podataka je spojnica – uvoz odbijen.": "데이터 폴더가 정션입니다 – 가져오기가 거부되었습니다."
  }
 }
