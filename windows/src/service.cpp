@@ -31,7 +31,12 @@ std::time_t config_stamp() {
 int run_server_service() {
     log_open(service_logs_dir() / L"server.log");  // 4.0: zapisi procesa SYSTEM odvojeno
     install_crash_logging("Solarni poslužitelj");
-    NamedMutex mutex(kServerServiceMutex);
+    std::wstring mutex_name = kServerServiceMutex;
+#ifdef SOLARI_DEV_BUILD
+    // samo razvojna gradnja: zaseban mutex za istodobne testove (npr. 24-satni test i e2e)
+    if (const wchar_t* m = _wgetenv(L"SOLARI_DEV_SERVICE_MUTEX"); m && *m) mutex_name = m;
+#endif
+    NamedMutex mutex(mutex_name.c_str());
     if (!mutex.owned()) {
         log_info("Solarni poslužitelj već radi – ova instanca se zatvara");
         return 0;
