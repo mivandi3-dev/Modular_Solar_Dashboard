@@ -6,13 +6,16 @@
 
 namespace sm {
 
-// https://app.solari/… ili https://data.solari/… (virtualni hostovi aplikacije); sve ostalo nije pouzdano
+// https://app.solari/… (mapa programa); sve ostalo nije pouzdano – ni https://data.solari/ (ui\images, NEW-05)
 bool trusted_app_url(const std::wstring& url);
+// https://data.solari/… – slike iz ui\images (samo .jpg/.jpeg/.png/.webp, nikad stranice ni poruke mostu)
+bool image_host_url(const std::wstring& url);
 // Može li adresa biti učitana u WebView (pouzdano + about:blank)
 bool allowed_navigation(const std::wstring& url);
 // Vanjska poveznica koja se smije otvoriti u pregledniku sustava (samo https://)
 bool external_browser_url(const std::wstring& url);
-// Zahtjev prema https://app.solari/: dopušteno samo /web/ i /assets/ (ne izvršne datoteke iz mape programa)
+// Zahtjev prema https://app.solari/: dopušteno samo /web/ i /assets/ (ne izvršne datoteke iz mape programa);
+// prema https://data.solari/: samo slike
 bool allowed_app_resource(const std::wstring& url);
 // Metode koje smije pozvati samo prozor postavki (PIN / prijava administratora), nikad dashboard
 bool settings_only_method(const std::string& method);

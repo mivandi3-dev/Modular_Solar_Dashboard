@@ -174,6 +174,7 @@ Pages load_pages(const Catalog& catalog, const fs::path& file) {
 void save_pages(const Pages& pages, const fs::path& file) {
     json list = json::array();
     for (const auto& p : pages.pages) list.push_back({{"widgets", layout_json(p)}});
+    if (!ui_write_allowed(file.parent_path())) throw std::runtime_error("Mapa rasporeda je spojnica – raspored nije spremljen.");  // NEW-05
     write_file_atomic(file, json{{"version", 2}, {"rotate_s", pages.rotate_s}, {"pages", list}}.dump(2));
 }
 

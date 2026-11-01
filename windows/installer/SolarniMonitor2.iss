@@ -280,6 +280,7 @@ Source: "{#Build}\web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubd
 Source: "{#Build}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#Build}\curl\*"; DestDir: "{app}\curl"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "poller_task.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "acl_setup.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 #ifdef Server
 ; 4.0 (B1): mrežni ulaz (Rust) kao usluga s virtualnim računom NT SERVICE\SolariGateway
 Source: "{#Build}\solari-gateway.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -302,20 +303,20 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "{cm:InstallingWebView}"; \
   Check: not WebView2Installed; Flags: waituntilterminated
+#ifndef TestInstall
+; 4.0 (SMA-02, W4, NEW-01): ACL mape podataka (acl_setup.ps1) – vlasnik Administratori, sve stare izričite dozvole
+; uklonjene (i korisnika koji je mapu stvorio prije instalacije ili iz 3.x); poslužitelj: samo SYSTEM i Administratori;
+; klijent: Users samo čitanje, ui\ Users izmjena, secrets\ bez Users (zatvoren u svakom trenutku)
 #ifdef Server
-; nadogradnja s 2.x: mapa je bila dostupna svim korisnicima – samo SYSTEM (S-1-5-18) i Administratori (S-1-5-32-544)
-Filename: "icacls.exe"; Parameters: """{#DataDir}"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C /Q"; \
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode server"; \
   Flags: runhidden waituntilterminated
 #else
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode client"; \
+  Flags: runhidden waituntilterminated
+#endif
+#endif
+#ifndef Server
 #ifndef TestInstall
-; 4.0 (SMA-02): mapa servisa – SYSTEM (S-1-5-18) i Administratori (S-1-5-32-544) puna prava, Users (S-1-5-32-545) samo čitanje;
-; naslijeđeno pravo izmjene se uklanja, pa korisnik ne može podmetnuti spojnicu u mapu u koju piše SYSTEM
-; 4.0 (SMA-02, W4): cijela mapa – SYSTEM i Administratori puna prava, Users samo čitanje (i nadogradnja s 4.0.0/3.x,
-; gdje su Users smjeli mijenjati config.json i data\); ui\ – Users izmjena; secrets\ – bez Users
-Filename: "icacls.exe"; Parameters: """{#DataDir}"" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /T /C /Q"; Flags: runhidden waituntilterminated
-Filename: "icacls.exe"; Parameters: """{#DataDir}\ui"" /grant *S-1-5-32-545:(OI)(CI)M /T /C /Q"; Flags: runhidden waituntilterminated
-Filename: "icacls.exe"; Parameters: """{#DataDir}\secrets"" /inheritance:r /remove:g *S-1-5-32-545 /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C /Q"; \
-  Flags: runhidden waituntilterminated; Check: DirExists(ExpandConstant('{#DataDir}\secrets'))
 ; PIN postavki (obavezan; broker ga traži za svaku izmjenu) – upisan na stranici instalacije, datoteka se odmah briše
 Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Flags: runhidden waituntilterminated; Check: PinEntered
 #endif

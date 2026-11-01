@@ -53,12 +53,33 @@ std::optional<Date> parse_iso_date(const std::string& text) {
     return d;
 }
 
-// ACE koji daje pravo upisa skupini svih korisnika (Users, Authenticated Users, Everyone, INTERACTIVE)
-bool broad_write_ace(PACL acl) {
-    static const wchar_t* kBroad[] = {L"S-1-5-32-545", L"S-1-5-11", L"S-1-1-0", L"S-1-5-4"};
+std::optional<std::wstring> sid_text(PSID sid) {
+    LPWSTR text = nullptr;
+    if (!sid || !ConvertSidToStringSidW(sid, &text)) return std::nullopt;
+    std::wstring out(text);
+    LocalFree(text);
+    return out;
+}
+
+// 4.0 (NEW-01): vlasnik i pravo upisa smiju imati samo SYSTEM, administratori i račun ovog procesa (u produkciji SYSTEM).
+// Vlasnik može sam sebi vratiti prava (WRITE_DAC), pa i vlasnik mape ili datoteke mora biti na tom popisu.
+bool trusted_sid(const std::wstring& sid) {
+    static const std::wstring me = [] {
+        try {
+            return ipc::current_user_sid();
+        } catch (...) {
+            return std::wstring(L"S-1-5-18");
+        }
+    }();
+    return sid == L"S-1-5-18" || sid == L"S-1-5-32-544" || sid == me ||
+           sid == L"S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";  // TrustedInstaller
+}
+
+// ACE koji daje pravo upisa nekome izvan pouzdanih (Users, Everyone, INTERACTIVE, pojedinačni korisnik…)
+std::optional<std::wstring> foreign_write_ace(PACL acl) {
     constexpr DWORD kWrite = FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES | DELETE | WRITE_DAC |
                              WRITE_OWNER | GENERIC_WRITE | GENERIC_ALL | FILE_DELETE_CHILD;
-    if (!acl) return true;  // NULL DACL = svi sve
+    if (!acl) return std::wstring(L"NULL DACL");  // svi sve
     for (DWORD i = 0; i < acl->AceCount; ++i) {
         void* ace = nullptr;
         if (!GetAce(acl, i, &ace)) continue;
@@ -66,13 +87,12 @@ bool broad_write_ace(PACL acl) {
         if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) continue;
         const auto* allowed = static_cast<ACCESS_ALLOWED_ACE*>(ace);
         if (!(allowed->Mask & kWrite)) continue;
-        LPWSTR text = nullptr;
-        if (!ConvertSidToStringSidW(const_cast<DWORD*>(&allowed->SidStart), &text)) continue;
-        const std::wstring sid(text);
-        LocalFree(text);
-        if (std::find(std::begin(kBroad), std::end(kBroad), sid) != std::end(kBroad)) return true;
+        const auto sid = sid_text(const_cast<DWORD*>(&allowed->SidStart));
+        if (!sid) return std::wstring(L"nepoznat SID");
+        if (*sid == L"S-1-3-0" && (header->AceFlags & INHERIT_ONLY_ACE)) continue;  // CREATOR OWNER (samo za nove objekte)
+        if (!trusted_sid(*sid)) return sid;
     }
-    return false;
+    return std::nullopt;
 }
 
 std::string path_problem(const fs::path& p) {
@@ -80,19 +100,25 @@ std::string path_problem(const fs::path& p) {
     if (a == INVALID_FILE_ATTRIBUTES) return {};
     if (a & FILE_ATTRIBUTE_REPARSE_POINT) return narrow(p.wstring()) + " je spojnica ili simbolička veza";
     PACL dacl = nullptr;
+    PSID owner = nullptr;
     PSECURITY_DESCRIPTOR sd = nullptr;
-    if (GetNamedSecurityInfoW(p.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl, nullptr, &sd) != ERROR_SUCCESS) {
+    if (GetNamedSecurityInfoW(p.c_str(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION, &owner, nullptr, &dacl,
+                              nullptr, &sd) != ERROR_SUCCESS) {
         return "ACL za " + narrow(p.wstring()) + " nije čitljiv";
     }
-    const bool broad = broad_write_ace(dacl);
+    const auto owner_sid = sid_text(owner);
+    const auto foreign = foreign_write_ace(dacl);
     LocalFree(sd);
-    return broad ? narrow(p.wstring()) + " daje svim korisnicima pravo upisa" : std::string();
+    if (!owner_sid || !trusted_sid(*owner_sid)) {
+        return narrow(p.wstring()) + " ima nepouzdanog vlasnika (" + narrow(owner_sid.value_or(L"?")) + ")";
+    }
+    return foreign ? narrow(p.wstring()) + " daje pravo upisa " + narrow(*foreign) : std::string();
 }
 
 }  // namespace
 
 std::string broker_home_problem() {
-    for (const fs::path& p : {home_dir(), data_dir(), config_file(), db_file(), secrets_dir()}) {
+    for (const fs::path& p : {home_dir(), data_dir(), config_file(), db_file(), secrets_dir(), secrets_file(), service_dir()}) {
         if (auto problem = path_problem(p); !problem.empty()) return problem;
     }
     return {};
@@ -127,12 +153,17 @@ std::optional<json> BrokerCore::check_pin(const json& request, const Settings& s
     const auto pin = str_field(request, "pin", 64);
     if (pin && sm::check_pin(*pin, s.settings_pin_hash)) {
         failures_ = 0;
+        lockouts_ = 0;
         return std::nullopt;
     }
     if (++failures_ >= kBrokerMaxPinFailures) {
+        // NEW-02: svako sljedeće zaključavanje traje dvostruko (15 min, 30 min, 1 h … najviše 24 h) – pogađanje PIN-a od
+        // 4 znamenke tako traje godinama umjesto dana; ispravan PIN poništava brojač
         failures_ = 0;
-        locked_until_ = t + kBrokerLockoutS;
-        log_warn("Broker: previše pogrešnih PIN-ova – izmjene zaključane 15 min");
+        const std::time_t span = std::min<std::time_t>(kBrokerLockoutMaxS, static_cast<std::time_t>(kBrokerLockoutS) << std::min(lockouts_, 8));
+        ++lockouts_;
+        locked_until_ = t + span;
+        log_warn("Broker: previše pogrešnih PIN-ova – izmjene zaključane " + std::to_string(span / 60) + " min");
     }
     return fail("pin_invalid", tr("Pogrešan PIN."));
 }

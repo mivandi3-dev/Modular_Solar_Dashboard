@@ -24,7 +24,8 @@ inline constexpr wchar_t kBrokerPipe[] = L"\\\\.\\pipe\\SolarniMonitor2.Settings
 // O:SY – vlasnik SYSTEM; 0x12018b = čitanje, upis podataka i atributa, bez FILE_CREATE_PIPE_INSTANCE
 inline constexpr wchar_t kBrokerSddl[] = L"O:SYD:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12018b;;;IU)";
 inline constexpr int kBrokerMaxPinFailures = 5;
-inline constexpr int kBrokerLockoutS = 15 * 60;
+inline constexpr int kBrokerLockoutS = 15 * 60;          // prvo zaključavanje; svako sljedeće dvostruko (NEW-02)
+inline constexpr int kBrokerLockoutMaxS = 24 * 3600;
 inline constexpr size_t kBrokerMaxRows = 500;  // redaka povijesti po zahtjevu (okvir ≤ 64 KB)
 
 // Logika brokera bez kanala (testira se izravno). Radi nad home_dir() procesa.
@@ -50,6 +51,7 @@ private:
     Clock clock_;
     std::mutex mutex_;  // jedan zahtjev u isto vrijeme (broker je u produkciji jedini pisac postavki)
     int failures_ = 0;
+    int lockouts_ = 0;  // uzastopna zaključavanja bez ispravnog PIN-a
     std::time_t locked_until_ = 0;
 };
 

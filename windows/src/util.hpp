@@ -49,6 +49,9 @@ fs::path service_logs_dir();
 // true ako ni jedna mapa od home_dir() do `dir` (uključivo) nije točka ponovne obrade (spojnica, simbolička veza);
 // prije svakog upisa procesa SYSTEM – inače bi korisnik spojnicom preusmjerio upis u sistemsku mapu
 bool no_reparse_points(const fs::path& dir);
+// 4.0 (NEW-05): upis sučelja u ui\ (zajednička mapa svih korisnika) – mapa unutar home_dir() ne smije sadržavati
+// spojnicu, inače bi drugi korisnik preusmjerio upis ili brisanje ovog korisnika; putovi izvan home_dir() (testovi) – true
+bool ui_write_allowed(const fs::path& dir);
 
 // ---------------------------------------------------------------- zapisnik
 enum class Level { Info, Warn, Error };

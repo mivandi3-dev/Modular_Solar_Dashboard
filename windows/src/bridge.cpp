@@ -688,7 +688,7 @@ void call(App& app, WindowKind kind, const std::string& method, const json& args
     }
     if (method == "reset_layout") {
         std::error_code ec;
-        fs::remove(layout_file(), ec);
+        if (ui_write_allowed(layout_file().parent_path())) fs::remove(layout_file(), ec);  // NEW-05
         return reply(pages_reply(load_pages(app.catalog(), layout_file())));
     }
     if (method == "set_display") { app.set_display(!args.empty() && args[0].is_boolean() && args[0].get<bool>()); return reply(nullptr); }

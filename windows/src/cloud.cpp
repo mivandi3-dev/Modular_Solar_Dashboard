@@ -81,6 +81,7 @@ std::string cached_image(const Settings& s, const std::string& kind, const std::
     }
     const fs::path dir = images_dir() / L"cloud";
     std::error_code ec;
+    if (!ui_write_allowed(dir)) throw CloudError("Mapa slika je spojnica ili simbolička veza.");  // NEW-05
     fs::create_directories(dir, ec);
     const std::wstring prefix = widen(kind + "-" + version);
     for (const auto& e : fs::directory_iterator(dir, ec)) {

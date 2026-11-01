@@ -19,22 +19,33 @@ bool starts_with(const std::wstring& s, const std::wstring& prefix) { return s.r
 
 bool trusted_app_url(const std::wstring& url) {
     const std::wstring u = lower(url);
-    // točno host (ne https://app.solari.zlo.hr/): iza imena mora doći '/'
-    return starts_with(u, L"https://app.solari/") || starts_with(u, L"https://data.solari/");
+    // točno host (ne https://app.solari.zlo.hr/): iza imena mora doći '/'. 4.0 (NEW-05): data.solari (mapa ui\images,
+    // u koju smiju pisati svi korisnici) nije pouzdan izvor stranica ni poruka mostu – samo slike
+    return starts_with(u, L"https://app.solari/");
 }
+
+bool image_host_url(const std::wstring& url) { return starts_with(lower(url), L"https://data.solari/"); }
 
 bool allowed_navigation(const std::wstring& url) { return trusted_app_url(url) || lower(url) == L"about:blank"; }
 
 bool external_browser_url(const std::wstring& url) {
     const std::wstring u = lower(url);
-    return starts_with(u, L"https://") && !trusted_app_url(url) && u.find_first_of(L" \"\r\n\t") == std::wstring::npos;
+    return starts_with(u, L"https://") && !trusted_app_url(url) && !image_host_url(url) && u.find_first_of(L" \"\r\n\t") == std::wstring::npos;
 }
 
 bool allowed_app_resource(const std::wstring& url) {
     const std::wstring u = lower(url);
-    if (!starts_with(u, L"https://app.solari/")) return true;  // ostali hostovi nisu predmet ovog filtra
+    const bool data = image_host_url(url);
+    if (!starts_with(u, L"https://app.solari/") && !data) return true;  // ostali hostovi nisu predmet ovog filtra
     if (u.find(L"..") != std::wstring::npos || u.find(L"%2e") != std::wstring::npos || u.find(L"%5c") != std::wstring::npos ||
         u.find(L'\\') != std::wstring::npos) {
+        return false;
+    }
+    if (data) {  // NEW-05: iz ui\images samo slike (bez HTML-a, SVG-a, skripti)
+        const std::wstring path = u.substr(0, u.find_first_of(L"?#"));
+        for (const std::wstring ext : {L".jpg", L".jpeg", L".png", L".webp"}) {
+            if (path.size() > ext.size() && path.compare(path.size() - ext.size(), ext.size(), ext) == 0) return true;
+        }
         return false;
     }
     return starts_with(u, L"https://app.solari/web/") || starts_with(u, L"https://app.solari/assets/");

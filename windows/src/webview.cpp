@@ -218,6 +218,7 @@ void WebViewWindow::create_controller() {
         on_new_window->Release();
         // app.solari mapira mapu programa: dopušteni su samo /web/ i /assets/ (ne .exe, .dll, curl …)
         webview_->AddWebResourceRequestedFilter(L"https://app.solari/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+        webview_->AddWebResourceRequestedFilter(L"https://data.solari/*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);  // NEW-05
         auto* on_resource = new ResourceRequested([](ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* args) {
             ComPtr<ICoreWebView2WebResourceRequest> request;
             LPWSTR uri = nullptr;

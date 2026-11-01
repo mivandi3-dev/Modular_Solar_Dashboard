@@ -558,3 +558,91 @@ TEST_CASE("B1: obrada poruka gatewaya – hello, config, request, odgovor u base
     r = handler({{"type", "request"}, {"route", "nope"}, {"method", "GET"}, {"client_ip", "10.0.0.2"}}, c);
     CHECK(r["error"] == "bad_request");
 }
+
+// ================================================================ nalazi neovisne verifikacije (NEW-01…05)
+TEST_CASE("NEW-01: broker odbija rad ako bilo tko osim SYSTEM-a, administratora i samog procesa smije pisati") {
+    TmpHome home;
+    fs::create_directories(data_dir());
+    write_file_atomic(config_file(), "{}");
+    CHECK(broker_home_problem().empty());
+    // podmetnuto pravo upisa jednom korisniku/grupi (ovdje Guests) na config.json – kao korisnik koji je datoteku stvorio sam
+    REQUIRE(_wsystem((L"icacls \"" + config_file().wstring() + L"\" /grant *S-1-5-32-546:(W) /Q >nul").c_str()) == 0);
+    const std::string problem = broker_home_problem();
+    CHECK(problem.find("S-1-5-32-546") != std::string::npos);
+    CHECK(_wsystem((L"icacls \"" + config_file().wstring() + L"\" /remove:g *S-1-5-32-546 /Q >nul").c_str()) == 0);
+    CHECK(broker_home_problem().empty());
+}
+
+TEST_CASE("NEW-02: svako sljedeće zaključavanje PIN-a traje dvostruko, ispravan PIN poništava brojač") {
+    TmpHome home;
+    std::time_t t = 1'800'000'000;
+    BrokerCore broker([] { return std::vector<std::string>{}; }, [&] { return t; });
+    save_secret_field("settings_pin_hash", hash_pin("2468"));
+    const std::wstring c = L"S-1-5-21-test";
+    const auto five_wrong = [&] {
+        for (int i = 0; i < kBrokerMaxPinFailures; ++i) broker.handle({{"op", "check_pin"}, {"pin", "0000"}}, c);
+    };
+    five_wrong();
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["retry_s"] == kBrokerLockoutS);
+    t += kBrokerLockoutS;
+    five_wrong();  // drugo zaključavanje: 30 min
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["retry_s"] == 2 * kBrokerLockoutS);
+    t += 2 * kBrokerLockoutS;
+    five_wrong();  // treće: 60 min
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["retry_s"] == 4 * kBrokerLockoutS);
+    t += 24 * 3600;
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["ok"] == true);  // ispravan PIN → brojač na 0
+    five_wrong();
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["retry_s"] == kBrokerLockoutS);
+    for (int k = 0; k < 12; ++k) {  // gornja granica 24 h
+        t += kBrokerLockoutMaxS;
+        five_wrong();
+    }
+    CHECK(broker.handle({{"op", "check_pin"}, {"pin", "2468"}}, c)["retry_s"] == kBrokerLockoutMaxS);
+}
+
+TEST_CASE("NEW-03: spremljena SMTP lozinka ne prelazi na drugi poslužitelj, port ili korisnika") {
+    Settings cur;
+    cur.smtp_host = "smtp.primjer.hr";
+    cur.smtp_user = "solari@primjer.hr";
+    cur.smtp_port = 587;
+    cur.smtp_password_enc = protect_secret("tajna");
+    const auto with = [&](const char* key, const json& value) {
+        json form = to_form(cur);
+        form["logger_interface"] = "Ethernet";
+        form[key] = value;
+        return validate_form(form, cur, {"Ethernet"});
+    };
+    auto v = with("plant_name", "Ista elektrana");
+    REQUIRE(v.settings);
+    CHECK(unprotect_secret(v.settings->smtp_password_enc) == "tajna");  // ništa vezano uz e-poštu nije promijenjeno
+    for (const auto& [key, value] : std::vector<std::pair<const char*, json>>{
+             {"smtp_host", "smtp.zlo.hr"}, {"smtp_user", "drugi@primjer.hr"}, {"smtp_port", 25}}) {
+        v = with(key, value);
+        REQUIRE(v.settings);
+        CHECK_MESSAGE(v.settings->smtp_password_enc.empty(), std::string(key));
+    }
+    v = with("smtp_host", "smtp2.primjer.hr");
+    json form = to_form(cur);
+    form["logger_interface"] = "Ethernet";
+    form["smtp_host"] = "smtp2.primjer.hr";
+    form["smtp_password"] = "nova";
+    v = validate_form(form, cur, {"Ethernet"});
+    REQUIRE(v.settings);
+    CHECK(unprotect_secret(v.settings->smtp_password_enc) == "nova");
+}
+
+TEST_CASE("NEW-05: sučelje ne piše ni ne briše kroz spojnicu u ui\\ (zajednička mapa svih korisnika)") {
+    TmpHome home;
+    fs::create_directories(ui_dir());
+    CHECK(ui_write_allowed(images_dir()));
+    const fs::path elsewhere = home.dir.path / L"drugdje";
+    fs::create_directories(elsewhere);
+    REQUIRE(_wsystem((L"cmd /c mklink /J \"" + images_dir().wstring() + L"\" \"" + elsewhere.wstring() + L"\" >nul").c_str()) == 0);
+    CHECK_FALSE(ui_write_allowed(images_dir()));
+    CHECK_FALSE(ui_write_allowed(images_dir() / L"cloud"));
+    CHECK(ui_write_allowed(ui_dir()));
+    CHECK(ui_write_allowed(fs::temp_directory_path()));  // izvan mape podataka (testovi) se ne provjerava
+    std::error_code ec;
+    fs::remove(images_dir(), ec);  // uklanja samo spojnicu
+}

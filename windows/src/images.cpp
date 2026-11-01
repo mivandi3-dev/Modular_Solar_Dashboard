@@ -209,6 +209,7 @@ json replace_image(const std::string& kind, const fs::path& source) {
         h = static_cast<UINT>(std::lround(double(h) * s.max_w / w));
         w = s.max_w;
     }
+    if (!ui_write_allowed(images_dir())) throw std::runtime_error("Mapa slika je spojnica ili simbolička veza – slika nije spremljena.");  // NEW-05
     fs::create_directories(images_dir());
     const fs::path target = images_dir() / s.custom_name;
     const fs::path tmp = fs::path(target) += L".tmp";
@@ -232,6 +233,7 @@ json replace_image(const std::string& kind, const fs::path& source) {
 
 void reset_image(const std::string& kind) {
     std::error_code ec;
+    if (!ui_write_allowed(images_dir())) return;  // NEW-05: ne briše kroz spojnicu
     fs::remove(images_dir() / spec(kind).custom_name, ec);
 }
 

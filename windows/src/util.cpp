@@ -90,6 +90,11 @@ bool no_reparse_points(const fs::path& dir) {
     }
     return true;
 }
+bool ui_write_allowed(const fs::path& dir) {
+    const fs::path rel = dir.lexically_relative(home_dir());
+    if (rel.empty() || *rel.begin() == L"..") return true;  // izvan mape podataka (npr. testovi)
+    return no_reparse_points(dir);
+}
 fs::path config_file() { return home_dir() / L"config.json"; }
 fs::path db_file() { return data_dir() / L"solar.db"; }
 fs::path ui_dir() { return home_dir() / L"ui"; }

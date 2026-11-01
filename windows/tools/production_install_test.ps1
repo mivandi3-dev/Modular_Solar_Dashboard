@@ -101,6 +101,15 @@ $secrets = Join-Path $cd "secrets"
 Check "klijent: secrets\ postoji (PIN iz instalacije)" (Test-Path (Join-Path $secrets "secrets.json"))
 Check "klijent: secrets\ – Users nemaju nikakav pristup" (-not ((Get-Acl $secrets).Access | Where-Object { $_.IdentityReference -match "Users|Korisnici|Everyone|Svi" }))
 $sd = Join-Path $env:ProgramData "SolarniServer"
+# NEW-01: vlasnik i izričite dozvole – samo SYSTEM, administratori (i usluga gatewaya u gateway\)
+$trusted = @("S-1-5-18", "S-1-5-32-544", "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464")
+foreach ($p in @($cd, (Join-Path $cd "config.json"), (Join-Path $cd "data"), $secrets, (Join-Path $secrets "secrets.json"), $sd,
+                 (Join-Path $sd "config.json"), (Join-Path $sd "data\users.db"), (Join-Path $sd "data\users.key"))) {
+    if (-not (Test-Path $p)) { continue }
+    $acl = Get-Acl $p
+    $owner = try { (New-Object Security.Principal.NTAccount $acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value } catch { $acl.Owner }
+    Check "vlasnik $p je SYSTEM ili Administratori (NEW-01)" ($trusted -contains $owner) $acl.Owner
+}
 Check "poslužitelj: mapa – samo SYSTEM i administratori" (-not ((Get-Acl $sd).Access | Where-Object { $_.IdentityReference -match "Users|Korisnici|Everyone|Svi|Authenticated" }))
 Check "poslužitelj: gateway\ – usluga gatewaya ima pravo izmjene" (((Get-Acl (Join-Path $sd "gateway")).Access | Where-Object { $_.IdentityReference -eq "NT SERVICE\SolariGateway" }) -ne $null)
 Check "gateway je izradio certifikat (ključ pod DPAPI-jem)" (Test-Path (Join-Path $sd "gateway\key.dpapi"))

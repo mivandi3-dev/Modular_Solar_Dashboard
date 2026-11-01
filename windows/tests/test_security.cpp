@@ -71,7 +71,18 @@ TEST_CASE("SMA-20: privremena datoteka s lozinkom ne nasljeđuje dozvole mape") 
 TEST_CASE("SMA-06: samo stranice aplikacije smiju biti učitane i slati poruke mostu") {
     CHECK(trusted_app_url(L"https://app.solari/web/index.html"));
     CHECK(trusted_app_url(L"HTTPS://APP.SOLARI/web/settings.html"));
-    CHECK(trusted_app_url(L"https://data.solari/logo.png"));
+    // NEW-05: ui\images (data.solari) nije pouzdan izvor stranica ni poruka mostu; poslužuje samo slike
+    CHECK_FALSE(trusted_app_url(L"https://data.solari/logo.png"));
+    CHECK_FALSE(allowed_navigation(L"https://data.solari/zlo.html"));
+    CHECK_FALSE(external_browser_url(L"https://data.solari/zlo.html"));
+    CHECK(allowed_app_resource(L"https://data.solari/hero_custom.jpg?v=12"));
+    CHECK(allowed_app_resource(L"https://data.solari/cloud/logo-ab12.PNG"));
+    CHECK(allowed_app_resource(L"https://data.solari/x.webp"));
+    CHECK_FALSE(allowed_app_resource(L"https://data.solari/zlo.html"));
+    CHECK_FALSE(allowed_app_resource(L"https://data.solari/zlo.svg"));
+    CHECK_FALSE(allowed_app_resource(L"https://data.solari/zlo.html?x=.png"));
+    CHECK_FALSE(allowed_app_resource(L"https://data.solari/../config.json"));
+    CHECK_FALSE(allowed_app_resource(L"https://data.solari/a.jpg/..%2fconfig.json"));
     CHECK_FALSE(trusted_app_url(L"https://app.solari.zlo.hr/web/index.html"));
     CHECK_FALSE(trusted_app_url(L"http://app.solari/web/index.html"));
     CHECK_FALSE(trusted_app_url(L"https://app.solari@zlo.hr/"));
@@ -196,7 +207,7 @@ TEST_CASE("SMA-27: pregled iz mreže poslužuje samo datoteke s popisa") {
     // sve ostalo nedostupno – i stvarno postojeće datoteke programa
     for (const char* p : {"/web/settings.html", "/web/settings.js", "/web/editor.js", "/web/overlay.js", "/web/vendor/qrcode.js",
                           "/web/../SolarniMonitor.exe", "/web/../solari_tests.exe", "/web/%2e%2e/config.json",
-                          "/web/..%5cconfig.json", "/web/i18n\..\..\config.json", "/web/INDEX.HTML", "/web/index.html::$DATA",
+                          "/web/..%5cconfig.json", "/web/i18n\\..\\..\\config.json", "/web/INDEX.HTML", "/web/index.html::$DATA",
                           "/web/INDEX~1.HTM", "/web/index.html.", "/data/logo.png", "/data/../solar.db", "/assets/logo.png",
                           "/web/", "/web", "/config.json", "/data/solar.db", "/data/backups/solar.db", "/data/logs/x.log",
                           "/alerts.json", "C:/Windows/win.ini", "/etc/passwd", "//web/index.html"}) {
