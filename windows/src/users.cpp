@@ -271,7 +271,9 @@ void UserStore::migrate() {
         {"acct_alerted", "INTEGER NOT NULL DEFAULT 0"},
         // 4.0: zaboravljena lozinka (PBKDF2 koda, rok, vrijeme zadnjeg slanja, pogrešni pokušaji)
         {"reset_salt", "BLOB"}, {"reset_hash", "BLOB"}, {"reset_until", "INTEGER NOT NULL DEFAULT 0"},
-        {"reset_sent", "INTEGER NOT NULL DEFAULT 0"}, {"reset_tries", "INTEGER NOT NULL DEFAULT 0"}};
+        {"reset_sent", "INTEGER NOT NULL DEFAULT 0"}, {"reset_tries", "INTEGER NOT NULL DEFAULT 0"},
+        // 5.0.1 (audit C-04): dnevni limit kodova po računu
+        {"reset_day", "INTEGER NOT NULL DEFAULT 0"}, {"reset_day_count", "INTEGER NOT NULL DEFAULT 0"}};
     for (const auto& [name, type] : columns) {
         if (!have.count(name)) exec(db_, ("ALTER TABLE users ADD COLUMN " + std::string(name) + " " + type).c_str());
     }
@@ -284,6 +286,12 @@ UserStore::~UserStore() {
 }
 
 Bytes UserStore::email_tag(const std::string& email) const { return hmac_sha256(keys_.hmac, "email:" + normalize_email(email)); }
+
+// 5.0.1 (audit C-07): kod za oporavak (~40 bita) kao HMAC s tajnim ključem iz users.key – sama kopija baze ne omogućuje
+// iscrpnu pretragu (prije: nesoljeni SHA-256)
+std::string UserStore::recovery_tag(const std::string& normalized) const {
+    return "h1:" + to_hex(hmac_sha256(keys_.hmac, "recovery:" + normalized));
+}
 
 Bytes UserStore::seal(const std::string& field, const std::string& value) const {
     return aes_gcm_encrypt(keys_.aes, value, "user." + field);
@@ -684,7 +692,7 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
         }
         res.recovery_codes = make_recovery_codes();
         json hashes = json::array();
-        for (const auto& rc : res.recovery_codes) hashes.push_back(to_hex(sha256(normalize_recovery_code(rc))));
+        for (const auto& rc : res.recovery_codes) hashes.push_back(recovery_tag(normalize_recovery_code(rc)));
         Stmt q(db_, "UPDATE users SET totp_secret_enc = ?, totp_pending_enc = NULL, totp_last_step = ?, recovery = ? WHERE id = ?");
         q.bind(1, seal("totp_secret", std::string(secret.begin(), secret.end()))).bind(2, *step).bind(3, hashes.dump()).bind(4, r.id);
         q.step();
@@ -711,10 +719,11 @@ bool UserStore::second_factor(const Row& r, const std::string& code, std::time_t
     const std::string norm = normalize_recovery_code(code);
     json codes = json::parse(r.recovery.empty() ? "[]" : r.recovery, nullptr, false);
     if (norm.size() == 8 && codes.is_array()) {
-        const std::string h = to_hex(sha256(norm));
+        const std::string tagged = recovery_tag(norm), legacy = to_hex(sha256(norm));  // 5.0.1: HMAC; prije: SHA-256
         for (auto it = codes.begin(); it != codes.end(); ++it) {
             if (!it->is_string()) continue;
             const std::string stored = it->get<std::string>();
+            const std::string& h = stored.rfind("h1:", 0) == 0 ? tagged : legacy;
             if (equal_ct(Bytes(h.begin(), h.end()), Bytes(stored.begin(), stored.end()))) {
                 codes.erase(it);
                 Stmt q(db_, "UPDATE users SET recovery = ? WHERE id = ?");
@@ -757,17 +766,29 @@ ResetRequest UserStore::request_password_reset(const std::string& email, std::ti
         return out;
     }
     {
-        Stmt q(db_, "SELECT reset_sent FROM users WHERE id = ?");
+        Stmt q(db_, "SELECT reset_sent, reset_day, reset_day_count FROM users WHERE id = ?");
         q.bind(1, row->id);
-        if (q.step() && now - q.i64(0) < kResetResendSeconds) return out;  // prečesto: bez novog koda i bez e-poruke
+        if (q.step()) {
+            const bool too_soon = now - q.i64(0) < kResetResendSeconds;
+            const bool same_day = now - q.i64(1) < 24 * 3600;
+            if (too_soon || (same_day && q.i64(2) >= kResetPerDay)) {
+                // bez novog koda i bez e-poruke, ali isti rad (PBKDF2) kao slanje – vrijeme ne otkriva račun (audit C-01)
+                Bytes dummy = pbkdf2_sha256("XXXXXXXX", Bytes(kSaltBytes, 0), iterations_, kHashBytes);
+                wipe(dummy);
+                return out;
+            }
+        }
     }
     Bytes raw = random_bytes(5);  // 40 bita → točno 8 znakova base32
     std::string code = base32(raw).substr(0, kResetCodeChars);
     wipe(raw);
     Bytes salt = random_bytes(kSaltBytes);
     Bytes hash = pbkdf2_sha256(code, salt, iterations_, kHashBytes);
-    Stmt q(db_, "UPDATE users SET reset_salt = ?, reset_hash = ?, reset_until = ?, reset_sent = ?, reset_tries = 0 WHERE id = ?");
-    q.bind(1, salt).bind(2, hash).bind(3, static_cast<int64_t>(now + kResetSeconds)).bind(4, static_cast<int64_t>(now)).bind(5, row->id);
+    Stmt q(db_, "UPDATE users SET reset_salt = ?, reset_hash = ?, reset_until = ?, reset_sent = ?, reset_tries = 0,"
+                " reset_day_count = CASE WHEN ? - reset_day < 86400 THEN reset_day_count + 1 ELSE 1 END,"
+                " reset_day = CASE WHEN ? - reset_day < 86400 THEN reset_day ELSE ? END WHERE id = ?");
+    q.bind(1, salt).bind(2, hash).bind(3, static_cast<int64_t>(now + kResetSeconds)).bind(4, static_cast<int64_t>(now))
+        .bind(5, static_cast<int64_t>(now)).bind(6, static_cast<int64_t>(now)).bind(7, static_cast<int64_t>(now)).bind(8, row->id);
     q.step();
     wipe(hash);
     out.send = true;
@@ -805,9 +826,10 @@ ResetResult UserStore::reset_password(const std::string& email, const std::strin
         }
     }
     bool good = false;
-    if (!salt.empty() && !hash.empty()) {
-        Bytes h = pbkdf2_sha256(entered, salt, iterations_, hash.size());
-        good = equal_ct(h, hash);
+    {  // PBKDF2 uvijek – i kad račun nema kod na čekanju, inače vrijeme odgovora otkriva postoji li račun (audit C-01)
+        const bool pending = !salt.empty() && !hash.empty();
+        Bytes h = pbkdf2_sha256(entered, pending ? salt : Bytes(kSaltBytes, 0), iterations_, pending ? hash.size() : kHashBytes);
+        good = pending && equal_ct(h, hash);
         wipe(h);
     }
     if (!good || now > until || tries >= kResetMaxTries) {
@@ -832,6 +854,8 @@ ResetResult UserStore::reset_password(const std::string& email, const std::strin
     wipe(new_password);
     log_info("Korisnici: korisnik #" + std::to_string(row->id) + " je postavio novu lozinku kodom iz e-pošte");
     res.status = ResetResult::Status::Ok;
+    res.email = email_plain;
+    res.first_name = open("first_name", row->first_enc);
     return res;
 }
 

@@ -53,6 +53,7 @@ inline constexpr size_t kResetCodeChars = 8;
 inline constexpr std::time_t kResetSeconds = 30 * 60;
 inline constexpr std::time_t kResetResendSeconds = 120;
 inline constexpr int kResetMaxTries = 5;
+inline constexpr int kResetPerDay = 5;  // 5.0.1 (audit C-04): najviše 5 kodova po računu u 24 h (zatrpavanje, kvota Resenda)
 inline constexpr std::time_t kSessionIdleSeconds = 30 * 24 * 3600;
 inline constexpr std::time_t kSessionMaxSeconds = 90 * 24 * 3600;
 
@@ -102,7 +103,8 @@ struct ResetRequest {
 };
 struct ResetResult {
     enum class Status { Ok, BadCode, PasswordInvalid } status = Status::BadCode;
-    std::string problem;  // PasswordInvalid: poruka za korisnika
+    std::string problem;            // PasswordInvalid: poruka za korisnika
+    std::string email, first_name;  // Ok: obavijest vlasniku računa da je lozinka promijenjena (audit C-09)
 };
 
 struct LoginResult {
@@ -159,6 +161,7 @@ private:
     std::optional<Row> row_by_email(const std::string& email);
     UserInfo info(const Row& r);
     Bytes email_tag(const std::string& email) const;
+    std::string recovery_tag(const std::string& normalized) const;
     Bytes seal(const std::string& field, const std::string& value) const;
     std::string open(const std::string& field, const Bytes& sealed) const;
     void validate(const UserInput& in, bool require_password, std::optional<int64_t> self);

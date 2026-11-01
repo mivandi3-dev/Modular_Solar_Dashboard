@@ -866,3 +866,18 @@ TEST_CASE("5.0.1: profil preglednika WebView2 je po korisniku (%LOCALAPPDATA%), 
     CHECK(dir_writable(dir));
     fs::remove_all(dir.parent_path(), ec);
 }
+
+TEST_CASE("5.0.1 (audit C-04): najviše 5 kodova za zaboravljenu lozinku po računu u 24 h") {
+    TmpDir dir;
+    UserStore users(dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kFastIterations);
+    users.create({"Ana", "Kovač", "ana@primjer.hr", kPw, Role::User}, 1000);
+    std::time_t t = 1'800'000'000;
+    for (int i = 0; i < kResetPerDay; ++i) {
+        CAPTURE(i);
+        CHECK(users.request_password_reset("ana@primjer.hr", t).send);
+        t += kResetResendSeconds;
+    }
+    CHECK_FALSE(users.request_password_reset("ana@primjer.hr", t).send);  // šesti u istom danu
+    t += 24 * 3600;
+    CHECK(users.request_password_reset("ana@primjer.hr", t).send);  // novi dan
+}

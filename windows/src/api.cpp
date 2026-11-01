@@ -111,10 +111,6 @@ void count_failure(const std::string& ip, std::time_t t) {
     }
 }
 
-void clear_failures(const std::string& ip) {
-    std::lock_guard lock(g_mutex);
-    g_failures.erase(ip);
-}
 
 std::string bearer(const HttpRequest& req) {
     const std::string h = req.header("Authorization");
@@ -163,7 +159,8 @@ HttpResponse login(UserStore& users, const HttpRequest& req, const std::string& 
     };
     switch (r.status) {
     case LoginResult::Status::Ok: {
-        clear_failures(ip);
+        // 5.0.1 (audit C-02): uspjeh NE briše brojač neuspjeha adrese – inače napadač s vlastitim računom nakon svakih
+        // 9 pokušaja jednom uspješnom prijavom poništi ograničenje (R-14a i dalje vodi zasebno stanje računa i izvora)
         log_info("API: prijava korisnika #" + std::to_string(r.user->id) + " s adrese " + ip);
         json ok = {{"token", r.token}, {"user", user_json(*r.user)}};
         if (!r.recovery_codes.empty()) ok["recovery_codes"] = r.recovery_codes;  // samo jednom, pri postavljanju
@@ -221,15 +218,28 @@ HttpResponse forgot_password(const ApiContext& ctx, const HttpRequest& req, cons
                                          {"message", tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta.")}});
 }
 
-HttpResponse reset_password(UserStore& users, const HttpRequest& req, const std::string& ip, std::time_t t) {
+// 5.0.1 (audit C-09): vlasnik računa dobiva potvrdu da je lozinka promijenjena (bez koda) – u zasebnoj niti
+void notify_password_changed(const Settings& s, const std::string& email, const std::string& first_name) {
+    if (email.empty() || resend_key(s).empty()) return;
+    std::thread([s, email, first_name] {
+        try {
+            send_password_changed_mail(s, email, first_name);
+        } catch (const std::exception& e) {
+            log_warn(std::string("Potvrda promjene lozinke nije poslana: ") + e.what());
+        }
+    }).detach();
+}
+
+HttpResponse reset_password(const ApiContext& ctx, const HttpRequest& req, const std::string& ip, std::time_t t) {
+    UserStore& users = *ctx.users;
     if (req.method != "POST") return HttpResponse::json_body(405, {{"error", "method"}});
     const auto body = body_json(req);
     if (!body) return HttpResponse::json_body(400, {{"error", "bad_request"}});
     const ResetResult r = users.reset_password(trim(str(*body, "email")), str(*body, "code"), str(*body, "new_password"), t);
     switch (r.status) {
     case ResetResult::Status::Ok:
-        clear_failures(ip);
         log_info("API: nova lozinka postavljena kodom iz e-pošte (adresa " + ip + ")");
+        notify_password_changed(ctx.settings(), r.email, r.first_name);  // audit C-09
         return HttpResponse::json_body(200, {{"ok", true}, {"message", tr("Nova lozinka je postavljena – prijavite se.")}});
     case ResetResult::Status::PasswordInvalid:
         return HttpResponse::json_body(400, {{"error", "password_invalid"}, {"message", r.problem}});
@@ -273,7 +283,7 @@ HttpServer::Handler api_handler(ApiContext ctx) {
             if (blocked(ip, t)) return HttpResponse::json_body(429, {{"error", "too_many_attempts"}});
             if (req.path == "/api/v1/login") return login(*ctx.users, req, ip, t);
             if (req.path == "/api/v1/forgot_password") return forgot_password(ctx, req, ip, t);
-            if (req.path == "/api/v1/reset_password") return reset_password(*ctx.users, req, ip, t);
+            if (req.path == "/api/v1/reset_password") return reset_password(ctx, req, ip, t);
 
             const std::string token = bearer(req);
             const auto me = token.empty() ? std::nullopt : ctx.users->session_user(token, t);

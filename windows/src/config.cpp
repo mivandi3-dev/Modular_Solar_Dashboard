@@ -572,7 +572,7 @@ Validation validate_form(const json& form, const Settings& current, const std::v
     }
     if (const std::string pwd = form.value("smtp_password", std::string{}); !pwd.empty()) {
         s.smtp_password_enc = protect_secret(pwd);
-    } else if (s.smtp_host != current.smtp_host || s.smtp_user != current.smtp_user ||
+    } else if (s.smtp_host != current.smtp_host || s.smtp_user != current.smtp_user || s.smtp_security != current.smtp_security ||
                (values.contains("smtp_port") && values["smtp_port"] != current.smtp_port)) {  // brojevi se upisuju u s tek na kraju
         // NEW-03: spremljena lozinka ne prelazi na drugi poslužitelj ili račun (inače bi je preusmjereni poslužitelj primio)
         s.smtp_password_enc.clear();

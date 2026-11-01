@@ -241,6 +241,9 @@
 
   // Prečaci (overlay.js) i editor widgeta (editor.js) učitavaju se nakon prvih podataka.
   function boot() {
+    // overlay.js je već učitan uz poruku o grešci (bez opcija): jedno ponovno učitavanje postavlja noćni način,
+    // skrivanje pokazivača i verziju (audit W-11)
+    if (loadedScripts.has("overlay.js")) { location.reload(); return; }
     booted = true;
     document.querySelector(".loading").remove();
     if (remote) return; // u pregledniku nema prečaca, editora ni noćnog načina

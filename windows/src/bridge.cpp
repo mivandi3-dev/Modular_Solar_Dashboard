@@ -6,6 +6,8 @@
 #include <map>
 #include <set>
 
+#include <thread>
+
 #include "alerts.hpp"
 #include "mailer.hpp"
 #include "api.hpp"
@@ -203,20 +205,34 @@ json admin_forgot_password(App& app, const std::string& email) {
     if (resend_key(s).empty()) return fail(tr("Poslužitelj nema podešeno slanje e-pošte – obratite se administratoru."));
     if (!valid_email(trim(email))) return fail(tr("Upišite e-poštu računa."));
     ResetRequest r = app.users().request_password_reset(trim(email), now());
-    if (r.send) {
-        try {
-            send_password_reset_mail(s, r.email, r.first_name, r.code, r.valid_until);
-        } catch (const std::exception& e) {
-            log_error(std::string("Kod za zaboravljenu lozinku nije poslan: ") + e.what());
-        }
-        wipe(r.code);
+    if (r.send) {  // 5.0.1 (audit W-01): slanje u zasebnoj niti – vrijeme odgovora ne otkriva postoji li račun
+        std::thread([s, r]() mutable {
+            try {
+                send_password_reset_mail(s, r.email, r.first_name, r.code, r.valid_until);
+            } catch (const std::exception& e) {
+                log_error(std::string("Kod za zaboravljenu lozinku nije poslan: ") + e.what());
+            }
+            wipe(r.code);
+        }).detach();
     }
     return ok(tr("Ako račun s tom adresom postoji, kod je poslan e-poštom. Vrijedi 30 minuta."));
 }
 
 json admin_reset_password(App& app, const std::string& email, const std::string& code, std::string new_password) {
     const ResetResult r = app.users().reset_password(trim(email), code, std::move(new_password), now());
-    if (r.status == ResetResult::Status::Ok) return ok(tr("Nova lozinka je postavljena – prijavite se."));
+    if (r.status == ResetResult::Status::Ok) {
+        const Settings s = app.settings();
+        if (!resend_key(s).empty()) {  // audit C-09: potvrda vlasniku računa
+            std::thread([s, mail = r.email, name = r.first_name] {
+                try {
+                    send_password_changed_mail(s, mail, name);
+                } catch (const std::exception& e) {
+                    log_warn(std::string("Potvrda promjene lozinke nije poslana: ") + e.what());
+                }
+            }).detach();
+        }
+        return ok(tr("Nova lozinka je postavljena – prijavite se."));
+    }
     if (r.status == ResetResult::Status::PasswordInvalid) return fail(r.problem, {{"password_invalid", true}});
     return fail(tr("Kod nije točan ili je istekao – zatražite novi."));
 }

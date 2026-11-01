@@ -2386,3 +2386,56 @@ TEST_CASE("API: zaboravljena lozinka – isti odgovor za svaku adresu, kod e-po�
     m["route"] = "users";
     CHECK_FALSE(request_from_ipc(m));
 }
+
+TEST_CASE("5.0.1 (audit C-02): uspješna prijava vlastitim računom ne poništava brojač neuspjeha adrese") {
+    TempHome home;
+    Catalog catalog = load_catalog(kSource / L"web" / L"catalog.json");
+    DataService data(home.dir.path / L"solar.db");
+    WeatherService weather;
+    UserStore users(home.dir.path / L"users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
+    users.create(person("admin@primjer.hr", Role::Admin), now());
+    users.create(person("napadac@primjer.hr", Role::User), now());
+    auto handler = api_handler({&data, &weather, &catalog, &users, [] { return Settings{}; }});
+    const std::string ip = "10.9.9.9";
+    for (int i = 0; i < 9; ++i) CHECK(handler(login_request("admin@primjer.hr", "pogadam-" + std::to_string(i), ip)).code == 401);
+    CHECK(handler(login_request("napadac@primjer.hr", "Sunce-2026-ploce", ip)).code == 200);  // vlastiti račun
+    int blocked = 0;
+    for (int i = 0; i < 3; ++i) blocked += handler(login_request("admin@primjer.hr", "jos-" + std::to_string(i), ip)).code == 429;
+    CHECK(blocked > 0);  // ograničenje adrese i dalje vrijedi
+}
+
+TEST_CASE("5.0.1 (audit C-07): kodovi za oporavak u bazi kao HMAC; stari SHA-256 zapis i dalje vrijedi") {
+    TempDir dir;
+    UserStore st(dir.path / "users.db", {random_bytes(32), random_bytes(32)}, kTestIterations);
+    UserInput in = person("ana@primjer.hr");
+    in.totp_required = true;
+    const int64_t ana = st.create(in, 0);
+    const std::time_t t = 1'800'000'000;
+    LoginResult r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t);
+    REQUIRE(r.status == LoginResult::Status::TotpSetup);
+    const Bytes secret = *from_base32(r.totp_secret);
+    r = st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t, totp_code(secret, totp_step(t)));
+    REQUIRE(r.status == LoginResult::Status::Ok);
+    REQUIRE(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t + 60, r.recovery_codes[3]).status == LoginResult::Status::Ok);
+    {  // 5.0.1 (audit C-07): u bazi HMAC s ključem iz users.key, ne nesoljeni SHA-256; stari SHA-256 zapis i dalje vrijedi
+        sqlite3* db = nullptr;
+        REQUIRE(sqlite3_open((dir.path / "users.db").string().c_str(), &db) == SQLITE_OK);
+        sqlite3_stmt* q = nullptr;
+        sqlite3_prepare_v2(db, "SELECT recovery FROM users WHERE id = ?", -1, &q, nullptr);
+        sqlite3_bind_int64(q, 1, ana);
+        REQUIRE(sqlite3_step(q) == SQLITE_ROW);
+        const json stored = json::parse(reinterpret_cast<const char*>(sqlite3_column_text(q, 0)));
+        sqlite3_finalize(q);
+        REQUIRE(stored.size() == 7);
+        for (const auto& h : stored) CHECK(h.get<std::string>().rfind("h1:", 0) == 0);
+        const std::string legacy_code = r.recovery_codes[5];
+        const std::string legacy = json::array({to_hex(sha256(normalize_recovery_code(legacy_code)))}).dump();  // zapis iz 3.1–5.0.0
+        sqlite3_prepare_v2(db, "UPDATE users SET recovery = ? WHERE id = ?", -1, &q, nullptr);
+        sqlite3_bind_text(q, 1, legacy.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(q, 2, ana);
+        sqlite3_step(q);
+        sqlite3_finalize(q);
+        sqlite3_close(db);
+        CHECK(st.login("ana@primjer.hr", "Sunce-2026-ploce", "", t + 90, legacy_code).status == LoginResult::Status::Ok);
+    }
+}

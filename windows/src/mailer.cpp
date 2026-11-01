@@ -158,6 +158,24 @@ MailContent password_reset_mail(const std::string& code, const std::string& firs
     return m;
 }
 
+MailContent password_changed_mail(const std::string& first_name, const std::string& email, const std::string& plant_name, std::time_t when) {
+    const std::string hello = first_name.empty() ? "Hello," : "Hello " + first_name + ",";
+    const std::string plant = plant_name.empty() ? "Solar Dashboard" : plant_name;
+    MailContent m;
+    m.subject = "Your Solar Dashboard password was changed";
+    const std::string inner =
+        "<p style=\"margin:0 0 14px 0\">" + html_escape(hello) + "</p>"
+        "<p style=\"margin:0 0 14px 0\">The password of your account <b>" + html_escape(email) + "</b> on <b>" + html_escape(plant) +
+        "</b> was changed with a one-time code on " + html_escape(mail_utc_text(when)) + ". All devices were signed out.</p>"
+        "<p style=\"margin:0 0 14px 0\"><b>If this was not you,</b> request a new code with <i>Forgot password</i> right away and "
+        "contact your administrator – someone may have access to your email.</p>";
+    m.html = frame("en", "Your password was changed", inner, "Sent by Solar Dashboard &middot; registration@solardashboard.bid");
+    m.text = hello + "\n\nThe password of your account " + email + " on " + plant + " was changed with a one-time code on " +
+             mail_utc_text(when) + ". All devices were signed out.\n\nIf this was not you, request a new code with Forgot password "
+             "right away and contact your administrator.\n";
+    return m;
+}
+
 MailContent alert_mail(const std::string& subject, const std::string& body, const std::string& plant_name) {
     MailContent m;
     m.subject = subject;
@@ -222,6 +240,7 @@ void resend_send(const Settings& s, const std::string& api_key, const std::strin
     const fs::path body_file = temp_file(L".json"), cfg = temp_file(L".cfg"), out = temp_file(L".out");
     files.paths = {body_file, cfg, out};
     write_private_file(body_file, body.dump());
+    write_private_file(out, "");  // odgovor curla ide u vlastitu datoteku (CREATE_NEW, privatni DACL) – audit C-05
     // ključ samo u -K datoteci (vlasnik, SYSTEM, administratori), ne u naredbenom retku koji vide drugi procesi
     write_private_file(cfg, resend_curl_config(batch ? kResendBatchUrl : kResendEmailsUrl, api_key, idem, body_file.wstring(), out.wstring()));
 
@@ -257,6 +276,19 @@ std::string send_activation_mail(const Settings& s, const std::string& email, co
     }
     wipe(key);
     return tr("Jednokratni kod poslan je na {email} (vrijedi do {time}).", {{"email", email}, {"time", local_text(valid_until)}});
+}
+
+void send_password_changed_mail(const Settings& s, const std::string& email, const std::string& first_name) {
+    std::string key = resend_key(s);
+    if (key.empty()) throw MailError(tr("Slanje e-pošte nije podešeno (Postavke → Obavijesti → API ključ servisa Resend)."));
+    NetInit net;
+    try {
+        resend_send(s, key, kMailFromRegistration, {email}, password_changed_mail(first_name, email, s.plant_name, now()), false);
+    } catch (...) {
+        wipe(key);
+        throw;
+    }
+    wipe(key);
 }
 
 void send_password_reset_mail(const Settings& s, const std::string& email, const std::string& first_name, const std::string& code,

@@ -68,7 +68,8 @@ const UI = (() => {
       return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
     };
     let ticks = "";
-    for (let i = 0; i <= maxValue; i += 2) {
+    const tickStep = Math.max(2, Math.ceil(maxValue / 400) * 2);  // najviše ~200 crtica i za velike vrijednosti (audit W-03)
+    for (let i = 0; i <= maxValue; i += tickStep) {
       const major = i % step === 0;
       const [x0, y0] = point(i, r - 13), [x1, y1] = point(i, r - (major ? 24 : 18));
       ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${major ? pal.TEXT : pal.MUTED}" `

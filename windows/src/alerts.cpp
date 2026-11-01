@@ -62,14 +62,38 @@ std::string header_utf8(const std::string& text) {  // RFC 2047 za naslov s kva�
 
 }  // namespace
 
+namespace {
+bool is_local_system() {  // proces radi kao NT AUTHORITY\SYSTEM (zadatak sustava / servis)
+    BYTE sid[SECURITY_MAX_SID_SIZE];
+    DWORD size = sizeof sid;
+    BOOL member = FALSE;
+    return CreateWellKnownSid(WinLocalSystemSid, nullptr, sid, &size) && CheckTokenMembership(nullptr, sid, &member) && member;
+}
+}  // namespace
+
+// 5.0.1 (audit C-05, I-03): procesi SYSTEM ne koriste C:\Windows\Temp (Users ondje smiju stvarati datoteke i unaprijed zauzeti
+// imena). GetTempPath2W vraća za SYSTEM zatvorenu C:\Windows\SystemTemp; bez nje (stariji Windows) SYSTEM koristi privatnu
+// service\tmp. Ime je 128 bita slučajno; datoteku uvijek stvara write_private_file (CREATE_NEW, privatni DACL).
 fs::path temp_file(const wchar_t* ext) {
-    wchar_t dir[MAX_PATH], name[MAX_PATH];
-    GetTempPathW(MAX_PATH, dir);
-    GetTempFileNameW(dir, L"sm2", 0, name);
-    fs::path p(name);
-    std::error_code ec;
-    fs::remove(p, ec);
-    return p.replace_extension(ext);
+    using GetTempPath2Fn = DWORD(WINAPI*)(DWORD, LPWSTR);
+    wchar_t dir[MAX_PATH + 1] = {};
+    DWORD n = 0;
+    if (auto fn = reinterpret_cast<GetTempPath2Fn>(GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetTempPath2W"))) {
+        n = fn(MAX_PATH + 1, dir);
+    }
+    fs::path base;
+    if (n > 0 && n <= MAX_PATH) {
+        base = dir;
+    } else if (is_local_system()) {
+        base = service_dir() / L"tmp";
+        create_private_dir(base);
+    } else {
+        n = GetTempPathW(MAX_PATH + 1, dir);
+        if (n == 0 || n > MAX_PATH) throw MailError(tr("Privremena mapa nije dostupna."));
+        base = dir;
+    }
+    Bytes raw = random_bytes(16);
+    return base / widen("sm2-" + to_hex(raw) + narrow(std::wstring(ext)));
 }
 
 TempFiles::~TempFiles() {
@@ -290,9 +314,8 @@ std::vector<std::string> send_mail(const Settings& s, const std::string& subj, c
     const std::string config =
         curl_mail_config(s, s.smtp_user.empty() ? std::string() : password.value_or(unprotect_secret(s.smtp_password_enc)), sender, *recipients);
 
-    std::string to;
-    for (const auto& r : *recipients) to += (to.empty() ? "" : ", ") + r;
-    std::string message = "From: " + sender + "\r\nTo: " + to + "\r\nSubject: " + header_utf8(subj) + "\r\n";
+    // 5.0.1 (audit C-06): primatelji samo u SMTP omotnici (mail-rcpt) – zaglavlje ne otkriva adrese administratora drugima
+    std::string message = "From: " + sender + "\r\nTo: undisclosed-recipients:;\r\nSubject: " + header_utf8(subj) + "\r\n";
     const std::time_t t = now();
     std::tm gm{};
     gmtime_s(&gm, &t);

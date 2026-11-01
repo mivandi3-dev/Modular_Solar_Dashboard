@@ -46,7 +46,7 @@ function renderReport(r) {
     kpi(T("Proizvodnja"), num(t.kwh), "kWh"),
     kpi(T("Ušteda"), num(t.savings, 2), cur),
     kpi(T("Manje CO₂"), num(t.co2_kg), "kg"),
-    kpi(T("Najveća snaga"), r.peak ? num(r.peak.kw, 1) : "—", "kW", r.peak ? `<small>${esc(fmtDate("date", new Date(r.peak.ts)))} ${r.peak.ts.slice(11, 16)}</small>` : ""),
+    kpi(T("Najveća snaga"), r.peak ? num(r.peak.kw, 1) : "—", "kW", r.peak ? `<small>${esc(fmtDate("date", new Date(r.peak.ts)))} ${esc(String(r.peak.ts).slice(11, 16))}</small>` : ""),
     kpi(T("Prošli mjesec"), num(r.compare.prev_month), "kWh", delta(t.kwh, r.compare.prev_month)),
     kpi(T("Isti mjesec lani"), r.compare.last_year ? num(r.compare.last_year) : "—", "kWh", delta(t.kwh, r.compare.last_year)),
   ];

@@ -1,5 +1,8 @@
 #include "dashboard.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 #include "images.hpp"
 #include "poller.hpp"
 
@@ -37,7 +40,13 @@ void apply_local_display(json& out, const Settings& local) {
     out["night_from"] = local.night_from;
     out["night_to"] = local.night_to;
     out["forecast_days"] = local.forecast_days;  // broj dana prognoze je postavka svakog ekrana
-    out["speedo_max_kw"] = out.value("speedo_max_kw", local.speedo_max_kw);
+    // 5.0.1 (audit W-03): vrijednosti s poslužitelja u razumnom rasponu – npr. 1e9 bi zamrznuo brzinomjer (petlja po kW)
+    const auto clamp_num = [&](const char* key, double fallback) {
+        const double v = out.contains(key) && out[key].is_number() ? out[key].get<double>() : fallback;
+        out[key] = std::isfinite(v) ? std::clamp(v, 0.0, 100000.0) : fallback;
+    };
+    clamp_num("speedo_max_kw", local.speedo_max_kw);
+    clamp_num("peak_power_kwp", local.peak_power_kwp);
 }
 
 }  // namespace sm
