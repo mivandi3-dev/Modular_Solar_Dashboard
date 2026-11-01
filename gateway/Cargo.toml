@@ -1,6 +1,6 @@
 [package]
 name = "solari-gateway"
-version = "5.0.0"
+version = "5.0.1"
 edition = "2021"
 rust-version = "1.85"
 description = "Solarni monitor 4.0 – mrežni ulaz Solarnog poslužitelja (B1): TLS/HTTP prema klijentima, imenovani kanal prema C++ servisu"

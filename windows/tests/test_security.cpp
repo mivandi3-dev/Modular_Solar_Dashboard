@@ -61,6 +61,7 @@ TEST_CASE("SMA-20: privremena datoteka s lozinkom ne nasljeđuje dozvole mape") 
 }
 
 // ---------------------------------------------------------------- SMA-05, SMA-06, SMA-17 (webguard)
+#include <algorithm>
 #include <fstream>
 #include <regex>
 #include <set>
@@ -374,4 +375,38 @@ TEST_CASE("SMA-02: mape u koje piše SYSTEM odbijaju spojnice; kopije, alerts.js
     fs::remove_all(elsewhere, ec);
     SetEnvironmentVariableW(L"SOLARI2_HOME", old[0] ? old : nullptr);
     _wputenv_s(L"SOLARI2_HOME", old);
+}
+
+TEST_CASE("Instalacija: prozor koji traži administratora pokreće se nakon instalacije preko ShellExecute (UAC, ne greška 740)") {
+    const auto read_all = [](const std::string& rel) {
+        std::ifstream in(std::string(SOLARI_SOURCE_DIR) + rel, std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        return ss.str();
+    };
+    REQUIRE(read_all("/res/server.manifest").find("requireAdministrator") != std::string::npos);
+    const std::string iss = read_all("/installer/SolarniMonitor2.iss");
+    REQUIRE_FALSE(iss.empty());
+    // stanje grana #ifdef Server / #else / #endif: postinstall u grani poslužitelja mora imati shellexec
+    std::istringstream lines(iss);
+    std::vector<int> branch;  // 1 = Server, 0 = klijent, -1 = ostalo
+    int server_launches = 0;
+    for (std::string line; std::getline(lines, line);) {
+        if (line.rfind("#ifdef Server", 0) == 0) branch.push_back(1);
+        else if (line.rfind("#ifndef Server", 0) == 0) branch.push_back(0);
+        else if (line.rfind("#if", 0) == 0) branch.push_back(-1);
+        else if (line.rfind("#else", 0) == 0 && !branch.empty() && branch.back() >= 0) branch.back() = 1 - branch.back();
+        else if (line.rfind("#endif", 0) == 0 && !branch.empty()) branch.pop_back();
+        else if (line.find("postinstall") != std::string::npos && line.rfind(";", 0) != 0) {
+            const bool server = std::find(branch.begin(), branch.end(), 1) != branch.end();
+            const bool client = std::find(branch.begin(), branch.end(), 0) != branch.end();
+            CAPTURE(line);
+            CHECK((server || client));  // pokretanje mora biti u grani poslužitelja ili klijenta, ne zajedničko
+            if (server) {
+                ++server_launches;
+                CHECK(line.find("shellexec") != std::string::npos);
+            }
+        }
+    }
+    CHECK(server_launches == 1);
 }

@@ -340,7 +340,13 @@ Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#Firew
 Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow program=""{app}\{#AppExe}"" protocol=TCP localport=8600 profile=private enable=yes"; \
   Flags: runhidden waituntilterminated
 #endif
+#ifdef Server
+; prozor poslužitelja traži administratora (manifest requireAdministrator): ShellExecute pokazuje UAC – CreateProcess
+; bez povišenja javlja grešku 740 („The requested operation requires elevation”)
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchApp}"; Flags: postinstall nowait skipifsilent shellexec
+#else
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchApp}"; Flags: postinstall nowait skipifsilent
+#endif
 
 [UninstallRun]
 Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFirewallRule"
