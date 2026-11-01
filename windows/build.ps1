@@ -58,6 +58,15 @@ try {
 }
 Copy-Item (Join-Path $env:CARGO_TARGET_DIR "release\solari-gateway.exe") (Join-Path $Build "solari-gateway.exe") -Force
 
+Step "Provjera ovisnosti (samo sistemski DLL-ovi)"
+# 4.0: ciljno računalo nema llvm-mingw – exe koji uvozi libunwind.dll / libc++.dll se tamo ne pokreće (usluga: istek roka)
+$Objdump = Find-Tool llvm-objdump
+foreach ($exe in "SolarniMonitor.exe", "SolarniServer.exe", "solari-gateway.exe") {
+    $dlls = & $Objdump -p (Join-Path $Build $exe) | Select-String "DLL Name: (.+)$" | ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    $bad = $dlls | Where-Object { $_ -match "^(libunwind|libc\+\+|libwinpthread|libgcc|libstdc\+\+)" }
+    if ($bad) { throw "$exe uvozi DLL koji na ciljnom računalu ne postoji: $($bad -join ', ')" }
+}
+
 $WebView = Join-Path $Redist "MicrosoftEdgeWebview2Setup.exe"
 if (-not (Test-Path $WebView)) {
     Step "Preuzimanje WebView2 bootstrappera"

@@ -423,7 +423,13 @@ begin
   if CurPageID = PinPage.ID then
   begin
     Pin := PinPage.Values[0];
-    if (Pin = '') and (PinPage.Values[1] = '') and PinAlreadySet then Exit;
+    if (Pin = '') and (PinPage.Values[1] = '') then
+    begin
+      { tiha instalacija: Inno i tada poziva ovu provjeru – PIN dolazi iz /PIN= (pronađeno produkcijskim testom) }
+      Pin := ExpandConstant('{param:PIN|}');
+      if (Pin = '') and PinAlreadySet then Exit;
+      if (Length(Pin) >= 4) and (Length(Pin) <= 8) and IsDigits(Pin) then Exit;
+    end;
     if (Length(Pin) < 4) or (Length(Pin) > 8) or not IsDigits(Pin) then
     begin
       MsgBox(CustomMessage('PinInvalid'), mbError, MB_OK);

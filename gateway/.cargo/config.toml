@@ -1,4 +1,6 @@
 # 4.0 (SMA-22, isto kao C++): Control Flow Guard za kod gatewaya i ovisnosti (standardna biblioteka Rusta nije
 # prevedena s CFG-om – za to bi trebao nestabilni -Zbuild-std); ASLR/High-entropy/NX su zadani.
+# +crt-static: libunwind statički – inače exe traži libunwind.dll iz llvm-mingw, kojeg na ciljnom računalu nema
+# (usluga se tada ne pokreće: SCM istek roka 30 s – pronađeno produkcijskim testom 2026-11-01).
 [target.x86_64-pc-windows-gnullvm]
-rustflags = ["-Ccontrol-flow-guard=checks", "-Clink-arg=-Wl,--guard-cf"]
+rustflags = ["-Ccontrol-flow-guard=checks", "-Clink-arg=-Wl,--guard-cf", "-Ctarget-feature=+crt-static"]

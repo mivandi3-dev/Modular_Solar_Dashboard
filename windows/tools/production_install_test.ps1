@@ -43,7 +43,11 @@ foreach ($t in @("Solarni monitor 2 - poller", "SolarniPosluzitelj")) {
     Check "zadatak '$t' postoji i radi kao SYSTEM" ($task -and $task.Principal.UserId -eq "SYSTEM") "$($task.Principal.UserId) / $($task.State)"
     Check "zadatak '$t' radi" ($task -and $task.State -eq "Running") "$($task.State)"
 }
-$svc = Get-CimInstance Win32_Service -Filter "Name='SolariGateway'"
+for ($i = 0; $i -lt 30; $i++) {  # usluga se pokreće (odgođeno automatski + Start-Service iz instalacije)
+    $svc = Get-CimInstance Win32_Service -Filter "Name='SolariGateway'"
+    if ($svc -and $svc.State -eq "Running") { break }
+    Start-Sleep 2
+}
 Check "usluga SolariGateway postoji" ($null -ne $svc)
 Check "usluga radi kao NT SERVICE\SolariGateway (virtualni račun)" ($svc.StartName -eq "NT SERVICE\SolariGateway") "$($svc.StartName)"
 Check "usluga je pokrenuta" ($svc.State -eq "Running") "$($svc.State)"
@@ -51,7 +55,7 @@ $privs = (& sc.exe qprivs SolariGateway) -join " "
 Check "usluga ima samo SeChangeNotifyPrivilege" ($privs -match "SeChangeNotifyPrivilege" -and ($privs -split "Se[A-Za-z]+Privilege").Count -le 2) $privs
 $sidtype = (& sc.exe qsidtype SolariGateway) -join " "
 Check "SID usluge: UNRESTRICTED" ($sidtype -match "UNRESTRICTED") $sidtype
-$gw = Get-Process solari-gateway -IncludeUserName -ErrorAction SilentlyContinue
+$gw = if ($svc -and $svc.ProcessId) { Get-Process -Id $svc.ProcessId -IncludeUserName -ErrorAction SilentlyContinue }  # proces usluge, ne bilo koji istog imena
 Check "proces gatewaya radi pod NT SERVICE\SolariGateway (AC-GW-3)" ($gw -and $gw.UserName -eq "NT SERVICE\SolariGateway") "$($gw.UserName)"
 
 # ---------------------------------------------------------------- mreža (AC-GW-2) i vatrozid
@@ -119,7 +123,7 @@ Check "servis je zapisao otisak gatewaya (service\gateway.json)" (Test-Path (Joi
 
 # ---------------------------------------------------------------- broker (SMA-02) – poller kao SYSTEM
 $plog = Get-Content (Join-Path $cd "service\logs\poller.log") -Raw -ErrorAction SilentlyContinue
-Check "poller (SYSTEM) je pokrenuo broker postavki" ($plog -match "Broker postavki pokrenut") (($plog -split "`n" | Select-String "Broker" | Select-Object -Last 2) -join " | ")
+Check "poller (SYSTEM) je pokrenuo broker postavki" ([bool]("$plog" -match "Broker postavki pokrenut")) (($plog -split "`n" | Select-String "Broker" | Select-Object -Last 2) -join " | ")
 
 # ---------------------------------------------------------------- deinstalacija
 if ($Uninstall) {
