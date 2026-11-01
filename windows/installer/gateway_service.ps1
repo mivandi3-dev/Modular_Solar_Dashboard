@@ -45,6 +45,7 @@ if ($Register) {
     Invoke-Sc "sidtype $Name unrestricted" | Out-Null
     Invoke-Sc "privs $Name SeChangeNotifyPrivilege" | Out-Null
     Invoke-Sc "failure $Name reset= 86400 actions= restart/5000/restart/5000/restart/60000" | Out-Null
+    Invoke-Sc "failureflag $Name 1" | Out-Null  # ponovno pokretanje i kad usluga sama javi grešku (izlazni kod ≠ 0)
 
     # mapa gatewaya: certifikat (ključ pod DPAPI-jem usluge) i zapisnik – SYSTEM, Administratori, usluga gatewaya
     $gw = Join-Path $DataDir "gateway"

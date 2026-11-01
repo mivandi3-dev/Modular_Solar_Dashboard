@@ -90,29 +90,38 @@ fn service_main(_args: Vec<OsString>) {
         log::error("Registracija usluge nije uspjela");
         return;
     };
-    let set = |state, accept| {
+    let set = |state, accept, exit_code| {
         let _ = status.set_service_status(ServiceStatus {
             service_type: ServiceType::OWN_PROCESS,
             current_state: state,
             controls_accepted: accept,
-            exit_code: ServiceExitCode::Win32(0),
+            exit_code,
             checkpoint: 0,
             wait_hint: Duration::from_secs(5),
             process_id: None,
         });
     };
-    set(ServiceState::Running, ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN);
+    set(ServiceState::Running, ServiceControlAccept::STOP | ServiceControlAccept::SHUTDOWN, ServiceExitCode::Win32(0));
     log::init(Some(options.data_dir.join("gateway.log")), false);
-    match runtime() {
+    // greška (npr. port zauzet) → izlazni kod različit od 0, da upravitelj usluga primijeni akcije ponovnog pokretanja
+    // (sc failure … + failureflag 1); uredno zaustavljanje (Stop/Shutdown) → 0
+    let failed = match runtime() {
         Ok(rt) => rt.block_on(async {
             tokio::select! {
-                r = run(options) => if let Err(e) = r { log::error(&format!("Gateway: {e}")) },
-                _ = stop_rx => log::info("Usluga zaustavljena"),
+                r = run(options) => match r {
+                    Err(e) => { log::error(&format!("Gateway: {e}")); true }
+                    Ok(()) => { log::error("Gateway je završio bez zahtjeva za zaustavljanje"); true }
+                },
+                _ = stop_rx => { log::info("Usluga zaustavljena"); false }
             }
         }),
-        Err(e) => log::error(&format!("Tokio: {e}")),
-    }
-    set(ServiceState::Stopped, ServiceControlAccept::empty());
+        Err(e) => {
+            log::error(&format!("Tokio: {e}"));
+            true
+        }
+    };
+    let exit_code = if failed { ServiceExitCode::ServiceSpecific(1) } else { ServiceExitCode::Win32(0) };
+    set(ServiceState::Stopped, ServiceControlAccept::empty(), exit_code);
 }
 
 fn main() {

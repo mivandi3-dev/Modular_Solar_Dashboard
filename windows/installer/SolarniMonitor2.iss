@@ -303,6 +303,13 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "{cm:InstallingWebView}"; \
   Check: not WebView2Installed; Flags: waituntilterminated
+#ifndef Server
+#ifndef TestInstall
+; PIN postavki (obavezan; broker ga traži za svaku izmjenu) – upisan na stranici instalacije, datoteka se odmah briše;
+; prije acl_setup.ps1, da ACL mape (i secrets\) uvijek postavi skripta, a ne proces koji je stvorio mapu
+Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Flags: runhidden waituntilterminated; Check: PinEntered
+#endif
+#endif
 #ifndef TestInstall
 ; 4.0 (SMA-02, W4, NEW-01): ACL mape podataka (acl_setup.ps1) – vlasnik Administratori, sve stare izričite dozvole
 ; uklonjene (i korisnika koji je mapu stvorio prije instalacije ili iz 3.x); poslužitelj: samo SYSTEM i Administratori;
@@ -313,12 +320,6 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 #else
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\acl_setup.ps1"" -DataDir ""{#DataDir}"" -Mode client"; \
   Flags: runhidden waituntilterminated
-#endif
-#endif
-#ifndef Server
-#ifndef TestInstall
-; PIN postavki (obavezan; broker ga traži za svaku izmjenu) – upisan na stranici instalacije, datoteka se odmah briše
-Filename: "{app}\{#AppExe}"; Parameters: "--set-pin-file ""{code:PinFile}"""; Flags: runhidden waituntilterminated; Check: PinEntered
 #endif
 #endif
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\poller_task.ps1"" -Register ""{app}"" {#TaskParams}"; \

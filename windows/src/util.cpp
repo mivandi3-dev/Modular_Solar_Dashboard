@@ -148,7 +148,17 @@ void create_private_dir(const fs::path& dir) {
         }
         CloseHandle(token);
     }
-    const std::wstring sddl = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + me + L")";
+    // Administrator (instalacija: --set-pin-file) je već pokriven s BA – bez izričitog ACE-a korisnika, inače broker
+    // (NEW-01) odbija mapu jer ima dozvolu pisanja za SID koji nije SYSTEM ni Administratori
+    BOOL is_admin = FALSE;
+    SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
+    PSID admins = nullptr;
+    if (AllocateAndInitializeSid(&nt, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &admins)) {
+        if (!CheckTokenMembership(nullptr, admins, &is_admin)) is_admin = FALSE;
+        FreeSid(admins);
+    }
+    const std::wstring self_ace = (is_admin || me == L"S-1-5-18") ? L"" : L"(A;OICI;FA;;;" + me + L")";
+    const std::wstring sddl = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)" + self_ace;
     PSECURITY_DESCRIPTOR sd = nullptr;
     if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr)) {
         throw std::runtime_error("Zaštita mape nije uspjela");

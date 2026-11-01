@@ -33,10 +33,11 @@ GATEWAY = str(HOME / "solari-gateway.exe")
 shutil.copy(GATEWAY_SRC, GATEWAY)
 BIN = HOME / "bin"
 BIN.mkdir()
-shutil.copy(SERVER, BIN / "SolarniServer.exe")
+# drugo ime: instalacija (taskkill /IM SolarniServer.exe) ne smije prekinuti test koji traje 24 h
+shutil.copy(SERVER, BIN / "SolarniServerSoak.exe")
 for d in ("web", "assets", "curl"):
     shutil.copytree(Path(SERVER).parent / d, BIN / d)
-SERVER = str(BIN / "SolarniServer.exe")
+SERVER = str(BIN / "SolarniServerSoak.exe")
 SID = subprocess.check_output(["powershell", "-NoProfile", "-Command",
                                "([System.Security.Principal.WindowsIdentity]::GetCurrent()).User.Value"], text=True).strip()
 PIPE = r"\\.\pipe\SolariSoak.Api." + str(os.getpid())

@@ -59,7 +59,8 @@ $gw = if ($svc -and $svc.ProcessId) { Get-Process -Id $svc.ProcessId -IncludeUse
 Check "proces gatewaya radi pod NT SERVICE\SolariGateway (AC-GW-3)" ($gw -and $gw.UserName -eq "NT SERVICE\SolariGateway") "$($gw.UserName)"
 
 # ---------------------------------------------------------------- mreža (AC-GW-2) i vatrozid
-$listen = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue
+# Windows u ovom okruženju listenere prikazuje i sa stanjem koje nije Listen – zato sve veze bez udaljene adrese
+$listen = Get-NetTCPConnection -ErrorAction SilentlyContinue | Where-Object { $_.RemotePort -eq 0 -or $_.State -eq "Listen" }
 $srvPids = (Get-Process SolarniServer -ErrorAction SilentlyContinue).Id
 Check "C++ servis poslužitelja nema TCP listener" (-not ($listen | Where-Object { $srvPids -contains $_.OwningProcess })) (($listen | Where-Object { $srvPids -contains $_.OwningProcess } | ForEach-Object { $_.LocalPort }) -join ",")
 $gwPort = $listen | Where-Object { $gw -and $_.OwningProcess -eq $gw.Id }
@@ -71,12 +72,10 @@ foreach ($r in @(@{n = "Solarni posluzitelj - gateway"; port = "8700"; prog = "s
     Check "vatrozid '$($r.n)': port $($r.port), samo $($r.prog), profil $($rule.Profile)" ($rule -and $pf.LocalPort -eq $r.port -and $af.Program -like "*$($r.prog)") "$($pf.LocalPort) $($af.Program)"
 }
 Check "staro pravilo 'Solarni posluzitelj - API' (cijeli program) uklonjeno" (-not (Get-NetFirewallRule -DisplayName "Solarni posluzitelj - API" -ErrorAction SilentlyContinue))
-try {
-    [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $ping = Invoke-RestMethod "https://127.0.0.1:8700/api/v1/ping" -TimeoutSec 10
-    Check "HTTPS ping kroz gateway → C++ servis (api 4)" ($ping.api -eq 4) ($ping | ConvertTo-Json -Compress)
-} catch { Check "HTTPS ping kroz gateway" $false $_.Exception.Message }
+# curl.exe -k: samopotpisani certifikat gatewaya (PS 5.1 povratni poziv za certifikat ne radi izvan runspacea)
+$pingRaw = (& curl.exe -sk --max-time 10 "https://127.0.0.1:8700/api/v1/ping") -join ""
+$ping = try { $pingRaw | ConvertFrom-Json } catch { $null }
+Check "HTTPS ping kroz gateway → C++ servis (api 4)" ($ping -and $ping.api -eq 4) $pingRaw
 
 # ---------------------------------------------------------------- kanali (AC-GW-4)
 foreach ($pipe in @("SolarniServer.Api.v1")) {
@@ -92,8 +91,12 @@ function Has-UsersWrite([string]$path) {
     $acl = Get-Acl $path
     foreach ($a in $acl.Access) {
         $sid = try { $a.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } catch { "" }
+        if ($a.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) { continue }  # ne vrijedi za sam objekt
+        # točni bitovi pisanja (Modify/Write sadrže i bitove čitanja): WriteData 0x2, AppendData 0x4, WriteEA 0x10,
+        # DeleteChild 0x40, WriteAttributes 0x100, Delete 0x10000, WRITE_DAC 0x40000, WRITE_OWNER 0x80000, GENERIC_ALL/WRITE
+        $writeBits = 0x2 -bor 0x4 -bor 0x10 -bor 0x40 -bor 0x100 -bor 0x10000 -bor 0x40000 -bor 0x80000 -bor 0x10000000 -bor 0x40000000
         if ($sid -in @("S-1-5-32-545", "S-1-5-11", "S-1-1-0", "S-1-5-4") -and $a.AccessControlType -eq "Allow" -and
-            ($a.FileSystemRights -band ([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::Delete))) { return $true }
+            (([int64]$a.FileSystemRights) -band $writeBits)) { return $true }
     }
     return $false
 }
