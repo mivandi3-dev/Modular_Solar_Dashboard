@@ -89,7 +89,7 @@
     style.textContent = ".nx-ico{width:1.2em;height:1.2em;vertical-align:-.2em;overflow:visible;"
       + "filter:drop-shadow(0 0 1.5px var(--nx-glow,rgba(56,189,248,.9))) drop-shadow(0 0 5px var(--nx-glow2,rgba(47,123,255,.45)))}"
       + ".tile .nx-ico,.i .nx-ico,.icon .nx-ico{width:1.35em;height:1.35em}"
-      + ".ix-ico{width:1.45em;height:1.45em;vertical-align:-.32em;object-fit:contain;border-radius:22%}"
+      + ".ix-ico{width:1.45em;height:1.45em;vertical-align:-.32em;object-fit:contain}"
       + ".tile .ix-ico,.i .ix-ico,.icon .ix-ico{width:1.6em;height:1.6em}";
     document.head.appendChild(style);
   }
