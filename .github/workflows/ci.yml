@@ -42,7 +42,9 @@ jobs:
           cmake --build build-ci --target solari_tests
       - name: Testovi
         shell: pwsh
-        run: .\build-ci\solari_tests.exe
+        # GitHubov poslužitelj radi kao administrator: testovi koji provjeravaju zabrane za obične korisnike (vlasnik kanala,
+        # odbijeni klijent, baza bez prava upisa) tamo ne mogu vrijediti – izvode se lokalno (windows/build.ps1, obični korisnik)
+        run: .\build-ci\solari_tests.exe "-tce=IPC: kanal*,IPC: klijent kojeg authorize*,SMA-02 broker preko kanala*,*trajni WAL*"
 
   gateway:
     name: Rust gateway (clippy, testovi, cargo-deny)
@@ -57,8 +59,14 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Testovi
         run: cargo test --locked
-      - name: Ranjive ovisnosti (cargo-deny, advisories)
-        uses: EmbarkStudios/cargo-deny-action@v2
+
+  gateway-deny:
+    name: Rust gateway – ranjive ovisnosti (cargo-deny)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: gateway/Cargo.toml
           command: check advisories
