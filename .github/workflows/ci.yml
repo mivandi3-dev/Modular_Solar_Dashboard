@@ -44,10 +44,11 @@ jobs:
         shell: pwsh
         # GitHubov poslužitelj radi kao administrator: testovi koji provjeravaju zabrane za obične korisnike (vlasnik kanala,
         # odbijeni klijent, baza bez prava upisa) tamo ne mogu vrijediti – izvode se lokalno (windows/build.ps1, obični korisnik)
-        run: .\build-ci\solari_tests.exe "-tce=IPC: kanal*,IPC: klijent kojeg authorize*,SMA-02 broker preko kanala*,*trajni WAL*"
+        run: |
+          .\build-ci\solari_tests.exe "-tce=IPC: kanal*,IPC: klijent kojeg authorize*,SMA-02 broker preko kanala*,*trajni WAL*"
 
   gateway:
-    name: Rust gateway (clippy, testovi, cargo-deny)
+    name: Rust gateway (clippy, testovi)
     runs-on: windows-2022
     timeout-minutes: 30
     defaults:
